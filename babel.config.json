@@ -1,0 +1,47 @@
+{
+  "presets": [
+    [
+      "@babel/preset-typescript",
+      {
+        "allowDeclareFields": true
+      }
+    ],
+    [
+      "@babel/preset-env",
+      {
+        "targets": { "node": 20 },
+        "useBuiltIns": "entry",
+        "corejs": 3
+      }
+    ]
+  ],
+  "plugins": [
+    [
+      "@babel/plugin-transform-typescript",
+      {
+        "allowDeclareFields": true,
+        "onlyRemoveTypeImports": true
+      }
+    ],
+    [
+      "module-resolver",
+      {
+        "root": "src",
+        "alias": {
+          "test": "test"
+        },
+        "extensions": [".js", ".ts"]
+      }
+    ],
+    ["@babel/plugin-proposal-decorators", { "legacy": true }],
+    ["@babel/plugin-transform-class-properties", { "loose": true }],
+    "@babel/plugin-transform-class-static-block",
+    "@babel/plugin-transform-classes",
+    "@babel/plugin-transform-runtime"
+  ],
+  "env": {
+    "test": {
+      "plugins": ["istanbul"]
+    }
+  }
+}

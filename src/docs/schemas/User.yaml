@@ -1,0 +1,44 @@
+User:
+  type: object
+  properties:
+    id:
+      type: integer
+      format: int64
+    name:
+      type: string
+    email:
+      type: string
+    password:
+      type: string
+    profilePic:
+      type: string
+      format: binary
+    phoneNumber:
+      type: string
+    roleId:
+      type: integer
+    destination:
+      type: string
+    departmentId:
+      type: integer
+    managerId:
+      type: integer
+    position:
+      type: string
+    employmentType:
+      type: string
+    dateOfTermination:
+      type: string
+      format: date-time
+    reasonForTermination:
+      type: string
+    createdBy:
+      type: integer
+    updatedBy:
+      type: integer
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time

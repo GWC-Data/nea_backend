@@ -1,0 +1,107 @@
+/auth/login:
+  post:
+    summary: Login user and generate JWT token
+    description: Authenticates a user and returns an access token along with user information.
+    operationId: login
+    tags:
+      - Auth
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+                format: email
+                description: The user's email address.
+              password:
+                type: string
+                description: The user's password.
+            required:
+              - email
+              - password
+    responses:
+      '200':
+        description: Successful login, returns access token and user details
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accessToken:
+                  type: string
+                  description: JWT token for authenticating future requests.
+                tokenExpiry:
+                  type: integer
+                  description: The expiry time of the JWT token in Unix timestamp.
+                user:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      description: User ID
+                    firstName:
+                      type: string
+                      description: First name of the user
+                    lastName:
+                      type: string
+                      description: Last name of the user
+                    email:
+                      type: string
+                      description: Email of the user
+                    role:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          description: Role ID
+                        name:
+                          type: string
+                          description: Role name
+                        permissions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: integer
+                                description: Permission ID
+                              action:
+                                type: string
+                                description: Action associated with the permission
+      '400':
+        description: Bad request, validation failed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Email is required"
+      '401':
+        description: Unauthorized, invalid credentials
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Invalid credentials"
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Login error"
+                error:
+                  type: string
+                  example: "Error details"
+    security: []

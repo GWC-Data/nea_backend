@@ -1,0 +1,26 @@
+openapi: 3.0.0
+info:
+  title: Sample Api
+  version: 1.0.0
+  description: Sample Description
+servers:
+  - url: http://localhost:8080/
+    description: Local Server
+security:
+  - bearerAuth: []
+  - staticAuth: []
+  
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    staticAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: >
+        Static authentication key required to access this endpoint.
+        Include the key in the `Authorization` header prefixed with `Bearer`, like:  
+        `Authorization: Bearer <your-static-key>`.
