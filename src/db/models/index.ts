@@ -1,1 +1,4 @@
 export * from './User';
+export * from  './EventTable';
+export * from './EventLogs';
+export * from './GroupTable';

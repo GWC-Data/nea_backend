@@ -1,53 +1,57 @@
-// 20260331000000-create-users-table.ts
+// XXXXXXXXXXXXXX03-create-event-logs.ts
 
 import { QueryInterface, DataTypes } from 'sequelize';
 
 export async function up(queryInterface: QueryInterface): Promise<void> {
   const dialect = (process.env.SQL_TYPE ?? 'postgres').toLowerCase();
 
-  // Create Users table with all fields
-  await queryInterface.createTable('Users', {
+  await queryInterface.createTable('EventLogs', {
     id: {
       type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true
     },
-    name: {
-      type: DataTypes.STRING,
-      allowNull: false
-    },
-    email: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      unique: true
-    },
-    password: {
-      type: DataTypes.STRING,
-      allowNull: false
-    },
-    role: {
-      type: DataTypes.ENUM('admin', 'user', 'moderator'),
-      allowNull: false,
-      defaultValue: 'user'
-    },
-    age: {
+    eventId: {
       type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    gender: {
-      type: DataTypes.ENUM('male', 'female', 'other', 'null'),
-      allowNull: true,
-      defaultValue: 'prefer_not_to_say'
-    },
-    groupId: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
+      allowNull: false,
       references: {
-        model: 'GroupTable',
-        key: 'groupId'
+        model: 'EventTable',
+        key: 'eventId'
       },
       onUpdate: 'CASCADE',
-      onDelete: 'SET NULL'
+      onDelete: 'CASCADE'
+    },
+    userId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'Users',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'CASCADE'
+    },
+    checkInTime: {
+      type: DataTypes.DATE,
+      allowNull: false
+    },
+    checkOutTime: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    totalHours: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      defaultValue: 0
+    },
+    garbageWeight: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      defaultValue: 0
+    },
+    garbageType: {
+      type: DataTypes.STRING,
+      allowNull: true
     },
     createdAt: {
       type: DataTypes.DATE,
@@ -59,33 +63,32 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     }
   });
 
-  // Add indexes for better query performance
-  await queryInterface.addIndex('Users', ['email']);
-  await queryInterface.addIndex('Users', ['role']);
-  await queryInterface.addIndex('Users', ['gender']);
-  await queryInterface.addIndex('Users', ['groupId']);
-
+  // Create indexes for better query performance
+  await queryInterface.addIndex('EventLogs', ['eventId']);
+  await queryInterface.addIndex('EventLogs', ['userId']);
+  await queryInterface.addIndex('EventLogs', ['checkInTime']);
+  
   // Dialect-specific timestamp defaults
   if (dialect === 'mysql') {
     await queryInterface.sequelize.query(`
-      ALTER TABLE Users
+      ALTER TABLE EventLogs
       MODIFY createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
       MODIFY updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL;
     `);
   } else if (dialect === 'postgres') {
     await queryInterface.sequelize.query(`
-      ALTER TABLE "Users"
+      ALTER TABLE "EventLogs"
       ALTER COLUMN "createdAt" SET DEFAULT NOW(),
       ALTER COLUMN "updatedAt" SET DEFAULT NOW();
     `);
   } else if (dialect === 'mssql') {
     await queryInterface.sequelize.query(`
-      ALTER TABLE Users
-      ADD CONSTRAINT DF_Users_createdAt DEFAULT GETDATE() FOR createdAt;
+      ALTER TABLE EventLogs
+      ADD CONSTRAINT DF_EventLogs_createdAt DEFAULT GETDATE() FOR createdAt;
     `);
     await queryInterface.sequelize.query(`
-      ALTER TABLE Users
-      ADD CONSTRAINT DF_Users_updatedAt DEFAULT GETDATE() FOR updatedAt;
+      ALTER TABLE EventLogs
+      ADD CONSTRAINT DF_EventLogs_updatedAt DEFAULT GETDATE() FOR updatedAt;
     `);
   } else {
     throw new Error('Unsupported SQL dialect');
@@ -95,19 +98,17 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
 export async function down(queryInterface: QueryInterface): Promise<void> {
   const dialect = (process.env.SQL_TYPE ?? 'postgres').toLowerCase();
   
-  // Drop the table
-  await queryInterface.dropTable('Users');
+  await queryInterface.dropTable('EventLogs');
   
-  // Clean up MSSQL default constraints if needed
   if (dialect === 'mssql') {
     try {
       await queryInterface.sequelize.query(`
-        IF OBJECT_ID('DF_Users_createdAt', 'D') IS NOT NULL
-          ALTER TABLE Users DROP CONSTRAINT DF_Users_createdAt;
+        IF OBJECT_ID('DF_EventLogs_createdAt', 'D') IS NOT NULL
+          ALTER TABLE EventLogs DROP CONSTRAINT DF_EventLogs_createdAt;
       `);
       await queryInterface.sequelize.query(`
-        IF OBJECT_ID('DF_Users_updatedAt', 'D') IS NOT NULL
-          ALTER TABLE Users DROP CONSTRAINT DF_Users_updatedAt;
+        IF OBJECT_ID('DF_EventLogs_updatedAt', 'D') IS NOT NULL
+          ALTER TABLE EventLogs DROP CONSTRAINT DF_EventLogs_updatedAt;
       `);
     } catch (error) {
       console.warn('Error dropping constraints:', error);

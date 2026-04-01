@@ -1,3 +1,5 @@
+// users/users.handler.ts
+
 import {
   EndpointAuthType,
   EndpointRequestType,
@@ -21,25 +23,38 @@ export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   res: Response
 ): Promise<void> => {
 
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, age, gender, groupId } = req.body;
 
   try {
+    // Check if user already exists
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      res.status(400).json({ message: 'Email already registered' });
+      return;
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await User.create({
       name,
       email,
       password: hashedPassword,
-      role
+      role: role || 'user',
+      age: age || null,
+      gender: gender || 'prefer_not_to_say',
+      groupId: groupId || null
     });
 
-    res.status(200).json({ message: 'User created successfully', user: newUser });
+    // Don't send password back in response
+    const userResponse = newUser.toJSON();
+    delete userResponse.password;
+
+    res.status(201).json({ message: 'User created successfully', user: userResponse });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_CREATION_ERROR, error });
   }
 };
-
 
 // ✅ Get All Users
 export const getAllUsersHandler: EndpointHandler<EndpointAuthType.NONE> = async (
@@ -47,7 +62,13 @@ export const getAllUsersHandler: EndpointHandler<EndpointAuthType.NONE> = async 
   res
 ) => {
   try {
-    const users = await User.findAll();
+    const users = await User.findAll({
+      attributes: { exclude: ['password'] },
+      include: [
+        { association: 'group', attributes: ['groupId', 'groupName'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
 
     res.status(200).json({ users });
   } catch (error) {
@@ -55,7 +76,6 @@ export const getAllUsersHandler: EndpointHandler<EndpointAuthType.NONE> = async 
     res.status(500).json({ message: USER_GET_ERROR, error });
   }
 };
-
 
 // ✅ Get User By ID
 export const getUserByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async (
@@ -66,7 +86,12 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async 
   const { id } = req.params;
 
   try {
-    const user = await User.findByPk(id);
+    const user = await User.findByPk(id, {
+      attributes: { exclude: ['password'] },
+      include: [
+        { association: 'group', attributes: ['groupId', 'groupName'] }
+      ]
+    });
 
     if (!user) {
       res.status(404).json({ message: USER_NOT_FOUND });
@@ -80,7 +105,6 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async 
   }
 };
 
-
 // ✅ Update User
 export const updateUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req,
@@ -88,7 +112,7 @@ export const updateUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
 ): Promise<void> => {
 
   const { id } = req.params;
-  const { name, email, role } = req.body;
+  const { name, email, role, age, gender, groupId } = req.body;
 
   try {
     const user = await User.findByPk(id);
@@ -98,21 +122,37 @@ export const updateUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
       return;
     }
 
-    user.set({
-      name,
-      email,
-      role
+    // Check if email is being changed and already exists
+    if (email && email !== user.email) {
+      const existingUser = await User.findOne({ where: { email } });
+      if (existingUser) {
+        res.status(400).json({ message: 'Email already in use' });
+        return;
+      }
+    }
+
+    // Update only provided fields
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+    if (role !== undefined) updateData.role = role;
+    if (age !== undefined) updateData.age = age;
+    if (gender !== undefined) updateData.gender = gender;
+    if (groupId !== undefined) updateData.groupId = groupId;
+
+    await user.update(updateData);
+
+    // Get updated user without password
+    const updatedUser = await User.findByPk(id, {
+      attributes: { exclude: ['password'] }
     });
 
-    await user.save();
-
-    res.status(200).json({ message: 'User updated successfully', user });
+    res.status(200).json({ message: 'User updated successfully', user: updatedUser });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_UPDATE_ERROR, error });
   }
 };
-
 
 // ✅ Delete User
 export const deleteUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
@@ -136,5 +176,109 @@ export const deleteUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_DELETION_ERROR, error });
+  }
+};
+
+// ✅ Update User Password
+export const updateUserPasswordHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  req,
+  res
+): Promise<void> => {
+
+  const { id } = req.params;
+  const { currentPassword, newPassword } = req.body;
+
+  try {
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      res.status(404).json({ message: USER_NOT_FOUND });
+      return;
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!isValidPassword) {
+      res.status(401).json({ message: 'Current password is incorrect' });
+      return;
+    }
+
+    // Hash and update new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await user.update({ password: hashedPassword });
+
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: USER_UPDATE_ERROR, error });
+  }
+};
+
+// ✅ Get Users by Role
+export const getUsersByRoleHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  req,
+  res
+): Promise<void> => {
+
+  const { role } = req.params;
+
+  try {
+    const users = await User.findAll({
+      where: { role },
+      attributes: { exclude: ['password'] },
+      order: [['name', 'ASC']]
+    });
+
+    res.status(200).json({ users });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: USER_GET_ERROR, error });
+  }
+};
+
+// ✅ Get Users by Group
+export const getUsersByGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  req,
+  res
+): Promise<void> => {
+
+  const { groupId } = req.params;
+
+  try {
+    const users = await User.findAll({
+      where: { groupId },
+      attributes: { exclude: ['password'] },
+      include: [
+        { association: 'group', attributes: ['groupId', 'groupName'] }
+      ],
+      order: [['name', 'ASC']]
+    });
+
+    res.status(200).json({ users });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: USER_GET_ERROR, error });
+  }
+};
+
+// ✅ Get Users by Gender
+export const getUsersByGenderHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  req,
+  res
+): Promise<void> => {
+
+  const { gender } = req.params;
+
+  try {
+    const users = await User.findAll({
+      where: { gender },
+      attributes: { exclude: ['password'] },
+      order: [['name', 'ASC']]
+    });
+
+    res.status(200).json({ users });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: USER_GET_ERROR, error });
   }
 };

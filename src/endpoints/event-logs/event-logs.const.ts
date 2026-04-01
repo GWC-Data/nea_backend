@@ -1,0 +1,9 @@
+export const EVENT_LOG_NOT_FOUND = 'Event log not found';
+export const EVENT_LOG_CREATION_ERROR = 'Error creating event log';
+export const EVENT_LOG_UPDATE_ERROR = 'Error updating event log';
+export const EVENT_LOG_DELETION_ERROR = 'Error deleting event log';
+export const EVENT_LOG_GET_ERROR = 'Error fetching event logs';
+export const EVENT_LOG_ALREADY_CHECKED_IN = 'User already checked in for this event';
+export const EVENT_LOG_NOT_CHECKED_IN = 'User not checked in for this event';
+export const CHECK_OUT_TIME_BEFORE_CHECK_IN = 'Check out time cannot be before check in time';
+export const INVALID_TIME_RANGE = 'Invalid time range';

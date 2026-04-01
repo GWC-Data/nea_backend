@@ -13,44 +13,50 @@
         content:
           application/json:
             schema:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: integer
-                  firstName:
-                    type: string
-                  lastName:
-                    type: string
-                  email:
-                    type: string
-                  dateOfBirth:
-                    type: string
-                  phoneNumber:
-                    type: string
-                  address:
-                    type: string
-                  qualification:
-                    type: string
-                  profilePic:
-                    type: string
-                  accountStatus:
-                    type: string
-                  lastLogin:
-                    type: string
-                  roleId:
-                    type: integer
-      404:
-        description: No users found
-        content:
-          application/json:
-            schema:
               type: object
               properties:
-                 message:
-                  type: string
-                  example: "No users found"
+                users:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      firstName:
+                        type: string
+                        example: "John"
+                      lastName:
+                        type: string
+                        example: "Doe"
+                      email:
+                        type: string
+                        example: "john.doe@example.com"
+                      phoneNumber:
+                        type: string
+                        example: "+1234567890"
+                      role:
+                        type: string
+                        example: "user"
+                      team:
+                        type: string
+                        example: "Engineering"
+                      age:
+                        type: integer
+                        example: 30
+                      DOB:
+                        type: string
+                        format: date
+                        example: "1994-03-15"
+                      groupId:
+                        type: integer
+                        example: 1
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
       500:
         description: Server error
         content:
@@ -60,7 +66,7 @@
               properties:
                 message:
                   type: string
-                  example: "Error occurred while retrieving users"
+                  example: "Error fetching users"
                 error:
                   type: string
 
@@ -78,25 +84,53 @@
         application/json:
           schema:
             type: object
+            required:
+              - firstName
+              - lastName
+              - email
+              - password
             properties:
               firstName:
                 type: string
-                example: Ram
+                example: "Ram"
               lastName:
                 type: string
-                example: M
+                example: "M"
               email:
                 type: string
-                example: Ram.M@example.com
+                format: email
+                example: "ram.m@example.com"
               phoneNumber:
                 type: string
-                example: "1234567890"
+                example: "+1234567890"
               password:
                 type: string
+                format: password
                 example: "strongpassword123"
+              role:
+                type: string
+                enum: ["admin", "user"]
+                default: "user"
+                example: "user"
+              team:
+                type: string
+                example: "Engineering"
+              age:
+                type: integer
+                minimum: 0
+                maximum: 150
+                example: 25
+              DOB:
+                type: string
                 format: date
-                example: "2023-01-01"
-              roleId:
+                example: "1999-01-01"
+              groupId:
+                type: integer
+                example: 1
+              createdBy:
+                type: integer
+                example: 1
+              updatedBy:
                 type: integer
                 example: 1
     responses:
@@ -109,8 +143,8 @@
               properties:
                 message:
                   type: string
-                  example: User created successfully
-                newUser:
+                  example: "User created successfully"
+                user:
                   type: object
                   properties:
                     id:
@@ -123,8 +157,32 @@
                       type: string
                     phoneNumber:
                       type: string
-                    roleId:
+                    role:
+                      type: string
+                    team:
+                      type: string
+                    age:
                       type: integer
+                    DOB:
+                      type: string
+                    groupId:
+                      type: integer
+                    createdAt:
+                      type: string
+                    updatedAt:
+                      type: string
+      400:
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Validation error"
+                errors:
+                  type: array
       500:
         description: User creation error
         content:
@@ -134,11 +192,97 @@
               properties:
                 message:
                   type: string
-                  example: "Error occurred while creating the user"
+                  example: "Error creating user"
                 error:
                   type: string
-      401:
-        description: Unauthorized
+
+/users/{id}:
+  get:
+    summary: Get a user by ID
+    description: Retrieves the details of a specific user by ID.
+    operationId: getUserById
+    security:
+      - bearerAuth: []
+    tags:
+      - Users
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID of the user to retrieve
+        schema:
+          type: integer
+          example: 1
+    responses:
+      200:
+        description: User details retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    firstName:
+                      type: string
+                    lastName:
+                      type: string
+                    email:
+                      type: string
+                    phoneNumber:
+                      type: string
+                    role:
+                      type: string
+                    team:
+                      type: string
+                    age:
+                      type: integer
+                    DOB:
+                      type: string
+                    groupId:
+                      type: integer
+                    createdBy:
+                      type: integer
+                    updatedBy:
+                      type: integer
+                    createdAt:
+                      type: string
+                    updatedAt:
+                      type: string
+                    creator:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        firstName:
+                          type: string
+                        lastName:
+                          type: string
+                        email:
+                          type: string
+                    updater:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        firstName:
+                          type: string
+                        lastName:
+                          type: string
+                        email:
+                          type: string
+                    group:
+                      type: object
+                      properties:
+                        groupId:
+                          type: integer
+                        groupName:
+                          type: string
+      404:
+        description: User not found
         content:
           application/json:
             schema:
@@ -146,10 +290,18 @@
               properties:
                 message:
                   type: string
-                  example: Unauthorized request        
+                  example: "User not found"
+      500:
+        description: Server error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Error fetching users"
 
-
-/users/{id}:
   put:
     summary: Update a user
     description: Updates the information of a user by ID.
@@ -174,31 +326,37 @@
             properties:
               firstName:
                 type: string
-                example: Jane
+                example: "Jane"
               lastName:
                 type: string
-                example: Doe
+                example: "Doe"
               email:
                 type: string
-                example: jane.doe@example.com
+                format: email
+                example: "jane.doe@example.com"
               phoneNumber:
                 type: string
-                example: "0987654321"
-              address:
+                example: "+0987654321"
+              role:
                 type: string
-                example: "123 Main St."
-              qualification:
+                enum: ["admin", "user"]
+                example: "admin"
+              team:
                 type: string
-                example: "BSc Computer Science"
-              profilePic:
+                example: "Product"
+              age:
+                type: integer
+                example: 28
+              DOB:
                 type: string
-                example: "profilepic.jpg"
-              roleId:
+                format: date
+                example: "1996-07-20"
+              groupId:
                 type: integer
                 example: 2
-              accountStatus:
-                type: string
-                example: "active"
+              updatedBy:
+                type: integer
+                example: 1
     responses:
       200:
         description: User updated successfully
@@ -214,6 +372,24 @@
                   type: object
                   properties:
                     id:
+                      type: integer
+                    firstName:
+                      type: string
+                    lastName:
+                      type: string
+                    email:
+                      type: string
+                    phoneNumber:
+                      type: string
+                    role:
+                      type: string
+                    team:
+                      type: string
+                    age:
+                      type: integer
+                    DOB:
+                      type: string
+                    groupId:
                       type: integer
       404:
         description: User not found
@@ -234,7 +410,7 @@
               properties:
                 message:
                   type: string
-                  example: "Error occurred while updating user"
+                  example: "Error updating user"
                 error:
                   type: string
 
@@ -283,14 +459,79 @@
               properties:
                 message:
                   type: string
-                  example: "Error occurred while deleting user"
+                  example: "Error deleting user"
                 error:
                   type: string
 
+# Additional endpoints
+/users/role/{role}:
   get:
-    summary: Get a user by ID
-    description: Retrieves the details of a specific user by ID.
-    operationId: getUserById
+    summary: Get users by role
+    description: Retrieves all users with a specific role.
+    operationId: getUsersByRole
+    security:
+      - bearerAuth: []
+    tags:
+      - Users
+    parameters:
+      - name: role
+        in: path
+        required: true
+        description: Role to filter users
+        schema:
+          type: string
+          enum: ["admin", "user"]
+    responses:
+      200:
+        description: Users retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                users:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/User'
+      500:
+        description: Server error
+
+/users/group/{groupId}:
+  get:
+    summary: Get users by group
+    description: Retrieves all users belonging to a specific group.
+    operationId: getUsersByGroup
+    security:
+      - bearerAuth: []
+    tags:
+      - Users
+    parameters:
+      - name: groupId
+        in: path
+        required: true
+        description: Group ID to filter users
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Users retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                users:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/User'
+      500:
+        description: Server error
+
+/users/{id}/password:
+  put:
+    summary: Update user password
+    description: Updates the password for a specific user.
+    operationId: updateUserPassword
     security:
       - bearerAuth: []
     tags:
@@ -299,62 +540,82 @@
       - name: id
         in: path
         required: true
-        description: ID of the user to retrieve
+        description: ID of the user
         schema:
           type: integer
-          example: 1
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - currentPassword
+              - newPassword
+            properties:
+              currentPassword:
+                type: string
+                format: password
+                example: "oldpassword123"
+              newPassword:
+                type: string
+                format: password
+                example: "newpassword123"
     responses:
       200:
-        description: User details retrieved successfully
+        description: Password updated successfully
         content:
           application/json:
             schema:
               type: object
               properties:
-                user:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                    firstName:
-                      type: string
-                    lastName:
-                      type: string
-                    email:
-                      type: string
-                    phoneNumber:
-                      type: string
-                    dateOfBirth:
-                      type: string
-                    address:
-                      type: string
-                    qualification:
-                      type: string
-                    profilePic:
-                      type: string
-                    roleId:
-                      type: string
-                    accountStatus:
-                      type: string
+                message:
+                  type: string
+                  example: "Password updated successfully"
+      401:
+        description: Current password is incorrect
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Current password is incorrect"
       404:
         description: User not found
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                  example: "User not found"
       500:
         description: Server error
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                  example: "Error occurred while retrieving user"
-                error:
-                  type: string
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phoneNumber:
+          type: string
+        role:
+          type: string
+        team:
+          type: string
+        age:
+          type: integer
+        DOB:
+          type: string
+          format: date
+        groupId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
