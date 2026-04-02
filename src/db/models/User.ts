@@ -1,3 +1,4 @@
+
 import {
   Table,
   Column,
@@ -43,34 +44,35 @@ export class User extends Model {
 
   @Column({
     type: DataType.STRING,
-    allowNull: false
+    allowNull: false,
+    defaultValue: 'user'
   })
   role!: string;
 
   @Column({
     type: DataType.INTEGER,
-    allowNull: true
+    allowNull: true  // Optional
   })
-  age!: number;
+  age!: number | null;
 
   @Column({
     type: DataType.STRING,
-    allowNull: true
+    allowNull: true  // Optional
   })
-  gender!: string;
+  gender!: string | null;
 
   @ForeignKey(() => GroupTable)
   @Column({
     type: DataType.INTEGER,
-    allowNull: true
+    allowNull: true  // Optional
   })
-  groupId!: number;
+  groupId!: number | null;
 
   @BelongsTo(() => GroupTable, {
     foreignKey: 'groupId',
     as: 'group'
   })
-  group!: GroupTable;
+  group!: GroupTable | null;
 
   @Column({
     type: DataType.DATE,

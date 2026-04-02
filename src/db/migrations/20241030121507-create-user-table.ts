@@ -5,7 +5,7 @@ import { QueryInterface, DataTypes } from 'sequelize';
 export async function up(queryInterface: QueryInterface): Promise<void> {
   const dialect = (process.env.SQL_TYPE ?? 'postgres').toLowerCase();
 
-  // Create Users table with all fields
+  // Create Users table with all fields (groupId, age, gender optional)
   await queryInterface.createTable('Users', {
     id: {
       type: DataTypes.INTEGER,
@@ -32,16 +32,16 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     },
     age: {
       type: DataTypes.INTEGER,
-      allowNull: true
+      allowNull: true  // Optional field
     },
     gender: {
-      type: DataTypes.ENUM('male', 'female', 'other', 'null'),
-      allowNull: true,
-      defaultValue: 'prefer_not_to_say'
+      type: DataTypes.ENUM('male', 'female', 'other', 'prefer_not_to_say'),
+      allowNull: true,  // Optional field
+      defaultValue: null
     },
     groupId: {
       type: DataTypes.INTEGER,
-      allowNull: true,
+      allowNull: true,  // Optional field
       references: {
         model: 'GroupTable',
         key: 'groupId'

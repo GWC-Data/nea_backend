@@ -17,7 +17,7 @@ import {
   USER_GET_ERROR
 } from './users.const';
 
-// ✅ Create User
+// ✅ Create User (age, gender, groupId are optional)
 export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req: EndpointRequestType[EndpointAuthType.NONE],
   res: Response
@@ -40,9 +40,9 @@ export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
       email,
       password: hashedPassword,
       role: role || 'user',
-      age: age || null,
-      gender: gender || 'prefer_not_to_say',
-      groupId: groupId || null
+      age: age !== undefined ? age : null,  // Optional: can be null
+      gender: gender !== undefined ? gender : null,  // Optional: can be null
+      groupId: groupId !== undefined ? groupId : null  // Optional: can be null
     });
 
     // Don't send password back in response
@@ -89,7 +89,7 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async 
     const user = await User.findByPk(id, {
       attributes: { exclude: ['password'] },
       include: [
-        { association: 'group', attributes: ['groupId', 'groupName'] }
+        { association: 'group',  attributes: ['groupId', 'groupName'] }
       ]
     });
 
@@ -105,7 +105,7 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async 
   }
 };
 
-// ✅ Update User
+// ✅ Update User (all fields optional)
 export const updateUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req,
   res
@@ -236,7 +236,7 @@ export const getUsersByRoleHandler: EndpointHandler<EndpointAuthType.NONE> = asy
   }
 };
 
-// ✅ Get Users by Group
+// ✅ Get Users by Group (groupId is optional in query)
 export const getUsersByGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req,
   res
@@ -245,16 +245,26 @@ export const getUsersByGroupHandler: EndpointHandler<EndpointAuthType.NONE> = as
   const { groupId } = req.params;
 
   try {
-    const users = await User.findAll({
-      where: { groupId },
-      attributes: { exclude: ['password'] },
-      include: [
-        { association: 'group', attributes: ['groupId', 'groupName'] }
-      ],
-      order: [['name', 'ASC']]
-    });
-
-    res.status(200).json({ users });
+    // If groupId is provided and valid, filter by it
+    if (groupId && groupId !== 'null') {
+      const users = await User.findAll({
+        where: { groupId: parseInt(groupId) },
+        attributes: { exclude: ['password'] },
+        include: [
+          { association: 'group', attributes: ['groupId', 'groupName'] }
+        ],
+        order: [['name', 'ASC']]
+      });
+      res.status(200).json({ users });
+    } else {
+      // Get users without a group
+      const users = await User.findAll({
+        where: { groupId: null },
+        attributes: { exclude: ['password'] },
+        order: [['name', 'ASC']]
+      });
+      res.status(200).json({ users });
+    }
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_GET_ERROR, error });
@@ -272,6 +282,25 @@ export const getUsersByGenderHandler: EndpointHandler<EndpointAuthType.NONE> = a
   try {
     const users = await User.findAll({
       where: { gender },
+      attributes: { exclude: ['password'] },
+      order: [['name', 'ASC']]
+    });
+
+    res.status(200).json({ users });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: USER_GET_ERROR, error });
+  }
+};
+
+// ✅ Get Users without Group
+export const getUsersWithoutGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  _req,
+  res
+): Promise<void> => {
+  try {
+    const users = await User.findAll({
+      where: { groupId: null },
       attributes: { exclude: ['password'] },
       order: [['name', 'ASC']]
     });
