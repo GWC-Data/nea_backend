@@ -5,7 +5,6 @@ on:
     branches:
       - main
 
-      
 jobs:
   deploy:
     runs-on: self-hosted
@@ -20,7 +19,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Start backend
+      - name: Restart backend with PM2
         run: |
           pm2 delete backend || true
           pm2 start npm --name "backend" -- start
+          pm2 save
