@@ -1,30 +1,25 @@
-name: Deploy Backend (Node + TS)
+name: Deploy Backend
 
 on:
   push:
     branches:
-      - main   # change if your branch is different
+      - main
 
 jobs:
   deploy:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Install dependencies
+      - name: Install deps
         run: npm install
 
-      - name: Build project
+      - name: Build
         run: npm run build
 
-      - name: Restart backend with PM2
+      - name: Start backend
         run: |
           pm2 delete backend || true
           pm2 start npm --name "backend" -- start
