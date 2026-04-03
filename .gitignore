@@ -161,7 +161,7 @@ typings/
 .yarn-integrity
 
 # dotenv environment variables file
-.env
+# .env
 .env.dev
 .env.staging
 .env.prod
@@ -187,4 +187,4 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
-keys/
+# keys/
