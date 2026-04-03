@@ -89,7 +89,7 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async 
     const user = await User.findByPk(id, {
       attributes: { exclude: ['password'] },
       include: [
-        { association: 'group',  attributes: ['groupId', 'groupName'] }
+        { association: 'group', attributes: ['groupId', 'groupName'] }
       ]
     });
 
