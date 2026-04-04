@@ -7,20 +7,21 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, backend]
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install deps
-        run: npm install
-
-      - name: Build
-        run: npm run build
-
-      - name: Restart backend with PM2
+      - name: Clone or Update Backend
         run: |
-          pm2 delete backend || true
-          pm2 start npm --name "backend" -- start
+          if [ ! -d "/home/shanmugavel/backend" ]; then
+            git clone https://github.com/GWC-Data/nea_backend /home/shanmugavel/backend
+          fi
+
+          cd /home/shanmugavel/backend
+          git pull origin main
+
+      - name: Install & Start Backend
+        run: |
+          cd /home/shanmugavel/backend
+          npm install
+          pm2 restart backend || pm2 start npm --name "backend" -- start
           pm2 save
