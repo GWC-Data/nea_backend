@@ -12,16 +12,35 @@ jobs:
     steps:
       - name: Clone or Update Backend
         run: |
-          if [ ! -d "/home/shanmugavel/backend" ]; then
+          if [ ! -d "/home/shanmugavel/backend/.git" ]; then
+            rm -rf /home/shanmugavel/backend
             git clone https://github.com/GWC-Data/nea_backend /home/shanmugavel/backend
           fi
 
           cd /home/shanmugavel/backend
-          git pull origin main
+          git fetch origin
+          git reset --hard origin/main
 
-      - name: Install & Start Backend
+      - name: Install Dependencies
         run: |
           cd /home/shanmugavel/backend
           npm install
-          pm2 restart backend || pm2 start npm --name "backend" -- start
+
+      - name: Build Backend (if applicable)
+        run: |
+          cd /home/shanmugavel/backend
+          npm run build || true
+
+      - name: Restart Backend with PM2
+        run: |
+          cd /home/shanmugavel/backend
+
+          pm2 describe backend > /dev/null 2>&1
+
+          if [ $? -eq 0 ]; then
+            pm2 restart backend
+          else
+            pm2 start npm --name "backend" -- start
+          fi
+
           pm2 save
