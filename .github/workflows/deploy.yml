@@ -26,10 +26,10 @@ jobs:
           cd /home/shanmugavel/backend
           npm install
 
-      - name: Build Backend (if applicable)
+      - name: Build Backend
         run: |
           cd /home/shanmugavel/backend
-          npm run build || true
+          npm run build
 
       - name: Restart Backend with PM2
         run: |
@@ -40,7 +40,7 @@ jobs:
           if [ $? -eq 0 ]; then
             pm2 restart backend
           else
-            pm2 start npm --name "backend" -- start
+             pm2 start npm --name "backend" -- run dev
           fi
 
           pm2 save
