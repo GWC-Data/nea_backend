@@ -40,7 +40,10 @@ jobs:
           if [ $? -eq 0 ]; then
             pm2 restart backend
           else
-             pm2 start npm --name "backend" -- run dev
+            pm2 start ./dist/index.js \
+              --name "backend" \
+              --cwd /home/shanmugavel/backend \
+              --node-args="-r ./dist/env/config.js"
           fi
 
           pm2 save
