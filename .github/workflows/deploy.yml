@@ -42,8 +42,9 @@ jobs:
           else
             pm2 start ./dist/index.js \
               --name "backend" \
-              --cwd /home/shanmugavel/backend \
-              --node-args="-r ./dist/env/config.js"
+              --interpreter ./node_modules/.bin/nodemon \
+              --node-args="-r @babel/register -r ./env/config.js" \
+              --watch
           fi
 
           pm2 save
