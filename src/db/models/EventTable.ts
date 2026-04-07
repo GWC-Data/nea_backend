@@ -1,3 +1,4 @@
+// src/db/models/EventTable.ts
 
 import {
   Table,
@@ -39,6 +40,38 @@ export class EventTable extends Model {
     allowNull: false
   })
   name!: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true
+  })
+  details!: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true
+  })
+  description!: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true
+  })
+  rewards!: string;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  })
+  joinsCount!: number;
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+    defaultValue: []
+  })
+  participants!: Array<{ userId: number; name: string; email: string; joinedAt: Date }>;
 
   @Column({
     type: DataType.DATE,

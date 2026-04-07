@@ -1,12 +1,6 @@
+// endpoints/event-logs/event-logs.ts
+
 import { Endpoint, EndpointAuthType, EndpointMethod } from 'node-server-engine';
-// import {
-//   createEventLogValidator,
-//   updateEventLogValidator,
-//   getEventLogValidator,
-//   deleteEventLogValidator,
-//   getEventLogsByUserValidator,
-//   getEventLogsByEventValidator
-// } from './event-logs.validator';
 import {
   getAllEventLogsHandler,
   getEventLogByIdHandler,
@@ -16,7 +10,8 @@ import {
   getEventLogsByUserHandler,
   getEventLogsByEventHandler,
   getUserEventLogsByDateHandler,
-  getEventLogsByDateRangeHandler
+  getEventLogsByDateRangeHandler,
+  getUserRewardsSummaryHandler
 } from './event-logs.handler';
 
 export const createEventLogEndpoint = new Endpoint({
@@ -87,6 +82,14 @@ export const getEventLogsByDateRangeEndpoint = new Endpoint({
   path: '/event-logs/date-range',
   method: EndpointMethod.POST,
   handler: getEventLogsByDateRangeHandler,
+  authType: EndpointAuthType.NONE,
+  validator: {},
+});
+
+export const getUserRewardsSummaryEndpoint = new Endpoint({
+  path: '/event-logs/user/:userId/rewards',
+  method: EndpointMethod.GET,
+  handler: getUserRewardsSummaryHandler,
   authType: EndpointAuthType.NONE,
   validator: {},
 });

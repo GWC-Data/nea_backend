@@ -1,3 +1,5 @@
+// endpoints/event-logs/event-logs.handler.ts
+
 import {
   EndpointAuthType,
   EndpointRequestType,
@@ -5,7 +7,7 @@ import {
   reportError
 } from 'node-server-engine';
 import { Response } from 'express';
-import { EventLogs } from 'db';
+import { EventLogs, User } from 'db';
 import {
   EVENT_LOG_NOT_FOUND,
   EVENT_LOG_CREATION_ERROR,
@@ -13,11 +15,51 @@ import {
   EVENT_LOG_DELETION_ERROR,
   EVENT_LOG_GET_ERROR,
   EVENT_LOG_ALREADY_CHECKED_IN,
-//   EVENT_LOG_NOT_CHECKED_IN,
-  CHECK_OUT_TIME_BEFORE_CHECK_IN
+  CHECK_OUT_TIME_BEFORE_CHECK_IN,
+  REWARD_POINTS_PER_30_MINS,
+  BADGE_SILVER_HOURS,
+  BADGE_GOLD_HOURS,
+  BADGE_DIAMOND_HOURS,
+  BADGE_MESSAGES
 } from './event-logs.const';
 import { Op } from 'sequelize';
 
+// Helper function to calculate rewards
+function calculateRewards(totalHours: number): { points: number; badge: string | null; message: string | null } {
+  const totalMinutes = totalHours * 60;
+  const points = Math.floor(totalMinutes / 30) * REWARD_POINTS_PER_30_MINS;
+  
+  let badge = null;
+  let message = null;
+  
+  if (totalHours >= BADGE_DIAMOND_HOURS) {
+    badge = 'diamond_champion';
+    message = BADGE_MESSAGES.DIAMOND;
+  } else if (totalHours >= BADGE_GOLD_HOURS) {
+    badge = 'gold';
+    message = BADGE_MESSAGES.GOLD;
+  } else if (totalHours >= BADGE_SILVER_HOURS) {
+    badge = 'silver';
+    message = BADGE_MESSAGES.SILVER;
+  }
+  
+  return { points, badge, message };
+}
+
+// Helper function to get user's total hours
+async function getUserTotalHours(userId: number): Promise<number> {
+  const eventLogs = await EventLogs.findAll({
+    where: {
+      userId,
+      checkOutTime: { [Op.ne]: null }
+    }
+  });
+  
+  const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+  return totalHours;
+}
+
+// ✅ Create Event Log (Check In)
 export const createEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req: EndpointRequestType[EndpointAuthType.NONE],
   res: Response
@@ -47,11 +89,11 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
     const eventLogData: any = {
       eventId,
       userId,
-      checkInTime: checkInTime || new Date(),
+      checkInTime: checkInTime ? new Date(checkInTime) : new Date(),
       checkOutTime: null,
       totalHours: 0,
       garbageWeight: garbageWeight || 0,
-      garbageType
+      garbageType: garbageType || null
     };
     
     // Only add groupId if the column exists
@@ -60,8 +102,20 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
     }
 
     const newEventLog = await EventLogs.create(eventLogData);
+    
+    // Fetch the created record with associations
+    const createdEventLog = await EventLogs.findByPk(newEventLog.id, {
+      include: [
+        { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+        { association: 'user', attributes: ['id', 'name', 'email'] },
+        { association: 'group', attributes: ['groupId', 'groupName'] }
+      ]
+    });
 
-    res.status(200).json({ message: 'Check in successful', eventLog: newEventLog });
+    res.status(200).json({ 
+      message: 'Check in successful', 
+      eventLog: createdEventLog
+    });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_CREATION_ERROR, error });
@@ -77,7 +131,7 @@ export const getAllEventLogsHandler: EndpointHandler<EndpointAuthType.NONE> = as
     const eventLogs = await EventLogs.findAll({
       include: [
         { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
-        { association: 'user', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        { association: 'user', attributes: ['id', 'name', 'email'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ],
       order: [['checkInTime', 'DESC']]
@@ -101,7 +155,7 @@ export const getEventLogByIdHandler: EndpointHandler<EndpointAuthType.NONE> = as
     const eventLog = await EventLogs.findByPk(id, {
       include: [
         { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
-        { association: 'user', attributes: ['id', 'firstName', 'lastName', 'email', 'role'] },
+        { association: 'user', attributes: ['id', 'name', 'email', 'role'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ]
     });
@@ -118,7 +172,7 @@ export const getEventLogByIdHandler: EndpointHandler<EndpointAuthType.NONE> = as
   }
 };
 
-// ✅ Update Event Log (Check Out)
+// ✅ Update Event Log (Check Out) with Rewards
 export const updateEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req,
   res
@@ -143,25 +197,73 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
         return;
       }
 
-      // Calculate total hours
+      // Calculate total hours for this session
       const diffMs = checkOutDate.getTime() - checkInDate.getTime();
-      const totalHours = diffMs / (1000 * 60 * 60);
+      const sessionHours = diffMs / (1000 * 60 * 60);
+      
+      // Get user's previous total hours
+      const previousTotalHours = await getUserTotalHours(eventLog.userId);
+      const newTotalHours = previousTotalHours + sessionHours;
+      
+      // Calculate rewards for this session
+      const sessionRewards = calculateRewards(sessionHours);
+      
+      // Calculate total rewards (cumulative)
+      const totalRewards = calculateRewards(newTotalHours);
 
       await eventLog.update({
         checkOutTime: checkOutDate,
-        totalHours,
+        totalHours: sessionHours,
         garbageWeight: garbageWeight !== undefined ? garbageWeight : eventLog.garbageWeight,
         garbageType: garbageType !== undefined ? garbageType : eventLog.garbageType
       });
 
-      res.status(200).json({ message: 'Check out successful', eventLog });
+      // Get updated event log with associations
+      const updatedEventLog = await EventLogs.findByPk(id, {
+        include: [
+          { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+          { association: 'user', attributes: ['id', 'name', 'email'] },
+          { association: 'group', attributes: ['groupId', 'groupName'] }
+        ]
+      });
+
+      // Prepare response with rewards
+      const responseData: any = {
+        message: 'Check out successful',
+        eventLog: updatedEventLog,
+        sessionRewards: {
+          hours: sessionHours.toFixed(2),
+          minutes: Math.floor(sessionHours * 60),
+          points: sessionRewards.points,
+          badge: sessionRewards.badge,
+          badgeMessage: sessionRewards.message
+        },
+        totalRewards: {
+          totalHours: newTotalHours.toFixed(2),
+          totalMinutes: Math.floor(newTotalHours * 60),
+          totalPoints: totalRewards.points,
+          badge: totalRewards.badge,
+          badgeMessage: totalRewards.message
+        }
+      };
+
+      res.status(200).json(responseData);
     } else {
       const updateData: any = {};
       if (garbageWeight !== undefined) updateData.garbageWeight = garbageWeight;
       if (garbageType !== undefined) updateData.garbageType = garbageType;
 
       await eventLog.update(updateData);
-      res.status(200).json({ message: 'Event log updated successfully', eventLog });
+      
+      const updatedEventLog = await EventLogs.findByPk(id, {
+        include: [
+          { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+          { association: 'user', attributes: ['id', 'name', 'email'] },
+          { association: 'group', attributes: ['groupId', 'groupName'] }
+        ]
+      });
+      
+      res.status(200).json({ message: 'Event log updated successfully', eventLog: updatedEventLog });
     }
   } catch (error) {
     reportError(error);
@@ -210,7 +312,24 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.NONE> =
       order: [['checkInTime', 'DESC']]
     });
 
-    res.status(200).json({ eventLogs });
+    // Calculate user's total stats
+    const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+    const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
+    const completedEvents = eventLogs.filter(log => log.checkOutTime).length;
+    
+    const rewards = calculateRewards(totalHours);
+
+    res.status(200).json({ 
+      eventLogs,
+      stats: {
+        totalHours: totalHours.toFixed(2),
+        totalMinutes: Math.floor(totalHours * 60),
+        totalPoints,
+        completedEvents,
+        currentBadge: rewards.badge,
+        badgeMessage: rewards.message
+      }
+    });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_GET_ERROR, error });
@@ -228,13 +347,26 @@ export const getEventLogsByEventHandler: EndpointHandler<EndpointAuthType.NONE> 
     const eventLogs = await EventLogs.findAll({
       where: { eventId },
       include: [
-        { association: 'user', attributes: ['id', 'firstName', 'lastName', 'email', 'role'] },
+        { association: 'user', attributes: ['id', 'name', 'email', 'role'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ],
       order: [['checkInTime', 'DESC']]
     });
 
-    res.status(200).json({ eventLogs });
+    // Calculate event stats
+    const totalParticipants = eventLogs.length;
+    const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+    const totalGarbageWeight = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
+
+    res.status(200).json({ 
+      eventLogs,
+      stats: {
+        totalParticipants,
+        totalHours: totalHours.toFixed(2),
+        totalGarbageWeight: totalGarbageWeight.toFixed(2),
+        averageHoursPerParticipant: totalParticipants > 0 ? (totalHours / totalParticipants).toFixed(2) : 0
+      }
+    });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_GET_ERROR, error });
@@ -249,19 +381,38 @@ export const getUserEventLogsByDateHandler: EndpointHandler<EndpointAuthType.NON
   const { userId, date } = req.params;
 
   try {
+    const startDate = new Date(date);
+    startDate.setHours(0, 0, 0, 0);
+    
+    const endDate = new Date(date);
+    endDate.setHours(23, 59, 59, 999);
+
     const eventLogs = await EventLogs.findAll({
       where: {
         userId,
         checkInTime: {
-          [Op.between]: [new Date(date), new Date(new Date(date).setHours(23, 59, 59))]
+          [Op.between]: [startDate, endDate]
         }
       },
       include: [
         { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] }
-      ]
+      ],
+      order: [['checkInTime', 'ASC']]
     });
 
-    res.status(200).json({ eventLogs });
+    // Calculate daily stats
+    const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+    const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
+
+    res.status(200).json({ 
+      eventLogs,
+      date,
+      stats: {
+        totalHours: totalHours.toFixed(2),
+        totalPoints,
+        eventsCount: eventLogs.length
+      }
+    });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_GET_ERROR, error });
@@ -276,21 +427,99 @@ export const getEventLogsByDateRangeHandler: EndpointHandler<EndpointAuthType.NO
   const { startDate, endDate } = req.body;
 
   try {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
     const eventLogs = await EventLogs.findAll({
       where: {
         checkInTime: {
-          [Op.between]: [new Date(startDate), new Date(endDate)]
+          [Op.between]: [start, end]
         }
       },
       include: [
         { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
-        { association: 'user', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        { association: 'user', attributes: ['id', 'name', 'email'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ],
       order: [['checkInTime', 'ASC']]
     });
 
-    res.status(200).json({ eventLogs });
+    // Calculate date range stats
+    const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+    const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
+    const totalGarbageWeight = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
+    const uniqueParticipants = new Set(eventLogs.map(log => log.userId)).size;
+
+    res.status(200).json({ 
+      eventLogs,
+      dateRange: { startDate, endDate },
+      stats: {
+        totalHours: totalHours.toFixed(2),
+        totalPoints,
+        totalGarbageWeight: totalGarbageWeight.toFixed(2),
+        totalEvents: eventLogs.length,
+        uniqueParticipants,
+        averageHoursPerParticipant: uniqueParticipants > 0 ? (totalHours / uniqueParticipants).toFixed(2) : 0
+      }
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: EVENT_LOG_GET_ERROR, error });
+  }
+};
+
+// ✅ Get User Rewards Summary
+export const getUserRewardsSummaryHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  req,
+  res
+): Promise<void> => {
+  const { userId } = req.params;
+
+  try {
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'name', 'email']
+    });
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    const eventLogs = await EventLogs.findAll({
+      where: {
+        userId,
+        checkOutTime: { [Op.ne]: null }
+      }
+    });
+
+    const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+    const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
+    const rewards = calculateRewards(totalHours);
+    
+    // Get badge history
+    const badgeHistory = [];
+    if (totalHours >= BADGE_SILVER_HOURS) badgeHistory.push({ badge: 'silver', hours: BADGE_SILVER_HOURS, earnedAt: new Date() });
+    if (totalHours >= BADGE_GOLD_HOURS) badgeHistory.push({ badge: 'gold', hours: BADGE_GOLD_HOURS, earnedAt: new Date() });
+    if (totalHours >= BADGE_DIAMOND_HOURS) badgeHistory.push({ badge: 'diamond_champion', hours: BADGE_DIAMOND_HOURS, earnedAt: new Date() });
+
+    res.status(200).json({
+      user,
+      rewards: {
+        totalHours: totalHours.toFixed(2),
+        totalMinutes: Math.floor(totalHours * 60),
+        totalPoints,
+        currentBadge: rewards.badge,
+        currentBadgeMessage: rewards.message,
+        nextBadge: totalHours < BADGE_SILVER_HOURS ? { badge: 'silver', hoursNeeded: (BADGE_SILVER_HOURS - totalHours).toFixed(2) } :
+                    totalHours < BADGE_GOLD_HOURS ? { badge: 'gold', hoursNeeded: (BADGE_GOLD_HOURS - totalHours).toFixed(2) } :
+                    totalHours < BADGE_DIAMOND_HOURS ? { badge: 'diamond_champion', hoursNeeded: (BADGE_DIAMOND_HOURS - totalHours).toFixed(2) } : null,
+        badgeHistory,
+        completedEvents: eventLogs.length
+      }
+    });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_GET_ERROR, error });

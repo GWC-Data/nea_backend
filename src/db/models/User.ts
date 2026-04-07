@@ -1,3 +1,4 @@
+// src/db/models/User.ts
 
 import {
   Table,
@@ -5,9 +6,11 @@ import {
   Model,
   DataType,
   ForeignKey,
-  BelongsTo
+  BelongsTo,
+  HasMany
 } from 'sequelize-typescript';
 import { GroupTable } from './GroupTable';
+import { EventLogs } from './EventLogs';
 
 @Table({
   tableName: 'Users',
@@ -51,20 +54,27 @@ export class User extends Model {
 
   @Column({
     type: DataType.INTEGER,
-    allowNull: true  // Optional
+    allowNull: true
   })
   age!: number | null;
 
   @Column({
     type: DataType.STRING,
-    allowNull: true  // Optional
+    allowNull: true
   })
   gender!: string | null;
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+    defaultValue: []
+  })
+  joinedEvents!: Array<{ eventId: number; eventName: string; joinedAt: Date }>;
 
   @ForeignKey(() => GroupTable)
   @Column({
     type: DataType.INTEGER,
-    allowNull: true  // Optional
+    allowNull: true
   })
   groupId!: number | null;
 
@@ -73,6 +83,9 @@ export class User extends Model {
     as: 'group'
   })
   group!: GroupTable | null;
+
+  @HasMany(() => EventLogs, { foreignKey: 'userId', as: 'eventLogs' })
+  eventLogs!: EventLogs[];
 
   @Column({
     type: DataType.DATE,

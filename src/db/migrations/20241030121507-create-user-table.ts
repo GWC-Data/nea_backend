@@ -1,11 +1,11 @@
-// 20260331000000-create-users-table.ts
+// 20260331000000-create-users-table.ts (Updated with joinedEvents)
 
 import { QueryInterface, DataTypes } from 'sequelize';
 
 export async function up(queryInterface: QueryInterface): Promise<void> {
   const dialect = (process.env.SQL_TYPE ?? 'postgres').toLowerCase();
 
-  // Create Users table with all fields (groupId, age, gender optional)
+  // Create Users table with all fields
   await queryInterface.createTable('Users', {
     id: {
       type: DataTypes.INTEGER,
@@ -32,22 +32,27 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     },
     age: {
       type: DataTypes.INTEGER,
-      allowNull: true  // Optional field
+      allowNull: true
     },
     gender: {
       type: DataTypes.ENUM('male', 'female', 'other', 'prefer_not_to_say'),
-      allowNull: true,  // Optional field
+      allowNull: true,
       defaultValue: null
     },
     groupId: {
       type: DataTypes.INTEGER,
-      allowNull: true,  // Optional field
+      allowNull: true,
       references: {
         model: 'GroupTable',
         key: 'groupId'
       },
       onUpdate: 'CASCADE',
       onDelete: 'SET NULL'
+    },
+    joinedEvents: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: []
     },
     createdAt: {
       type: DataTypes.DATE,
@@ -59,7 +64,7 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     }
   });
 
-  // Add indexes for better query performance
+  // Add indexes
   await queryInterface.addIndex('Users', ['email']);
   await queryInterface.addIndex('Users', ['role']);
   await queryInterface.addIndex('Users', ['gender']);
@@ -95,10 +100,8 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
 export async function down(queryInterface: QueryInterface): Promise<void> {
   const dialect = (process.env.SQL_TYPE ?? 'postgres').toLowerCase();
   
-  // Drop the table
   await queryInterface.dropTable('Users');
   
-  // Clean up MSSQL default constraints if needed
   if (dialect === 'mssql') {
     try {
       await queryInterface.sequelize.query(`

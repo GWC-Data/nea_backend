@@ -1,4 +1,4 @@
-// XXXXXXXXXXXXXX03-create-event-logs.ts
+// 20260331000003-create-event-logs.ts
 
 import { QueryInterface, DataTypes } from 'sequelize';
 
@@ -30,6 +30,16 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
       },
       onUpdate: 'CASCADE',
       onDelete: 'CASCADE'
+    },
+    groupId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'GroupTable',
+        key: 'groupId'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
     },
     checkInTime: {
       type: DataTypes.DATE,
@@ -66,6 +76,7 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
   // Create indexes for better query performance
   await queryInterface.addIndex('EventLogs', ['eventId']);
   await queryInterface.addIndex('EventLogs', ['userId']);
+  await queryInterface.addIndex('EventLogs', ['groupId']);
   await queryInterface.addIndex('EventLogs', ['checkInTime']);
   
   // Dialect-specific timestamp defaults
