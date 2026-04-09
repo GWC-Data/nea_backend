@@ -37,7 +37,9 @@ export const loginHandler: EndpointHandler<EndpointAuthType> = async (
       return;
     }
 
-    // ✅ Simple user payload
+    
+
+    // ✅ Simple user payload (flat structure for JWT, not wrapped in 'user' object)
     const userPayload = {
       id: user.id,
       name: user.name,

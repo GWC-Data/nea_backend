@@ -80,6 +80,12 @@ export class EventLogs extends Model {
   garbageType!: string;
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true
+  })
+  wasteImage!: string;
+
+  @Column({
     type: DataType.DATE,
     allowNull: false,
     defaultValue: DataType.NOW

@@ -17,8 +17,8 @@ import {
 } from './groups.const';
 
 // ✅ Create Group
-export const createGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req: EndpointRequestType[EndpointAuthType.NONE],
+export const createGroupHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
   const { groupName } = req.body;
@@ -41,7 +41,7 @@ export const createGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async 
 };
 
 // ✅ Get All Groups (without associations temporarily)
-export const getAllGroupsHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const getAllGroupsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   _req,
   res
 ): Promise<void> => {
@@ -95,7 +95,7 @@ export const getAllGroupsHandler: EndpointHandler<EndpointAuthType.NONE> = async
 };
 
 // ✅ Get Group By ID (without associations temporarily)
-export const getGroupByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const getGroupByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
@@ -154,7 +154,7 @@ export const getGroupByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async
 };
 
 // ✅ Get Users by Group
-export const getGroupUsersHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const getGroupUsersHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
@@ -207,7 +207,7 @@ export const getGroupUsersHandler: EndpointHandler<EndpointAuthType.NONE> = asyn
 };
 
 // ✅ Update Group
-export const updateGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const updateGroupHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
@@ -244,7 +244,7 @@ export const updateGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async 
 };
 
 // ✅ Delete Group 
-export const deleteGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const deleteGroupHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {

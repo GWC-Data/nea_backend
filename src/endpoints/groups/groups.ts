@@ -18,7 +18,7 @@ export const createGroupEndpoint = new Endpoint({
   path: '/groups',
   method: EndpointMethod.POST,
   handler: createGroupHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: createGroupValidator,
 });
 
@@ -26,7 +26,7 @@ export const getAllGroupsEndpoint = new Endpoint({
   path: '/groups',
   method: EndpointMethod.GET,
   handler: getAllGroupsHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: {},
 });
 
@@ -34,7 +34,7 @@ export const getGroupByIdEndpoint = new Endpoint({
   path: '/groups/:groupId',
   method: EndpointMethod.GET,
   handler: getGroupByIdHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: getGroupValidator,
 });
 
@@ -42,7 +42,7 @@ export const updateGroupEndpoint = new Endpoint({
   path: '/groups/:groupId',
   method: EndpointMethod.PUT,
   handler: updateGroupHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: updateGroupValidator,
 });
 
@@ -50,7 +50,7 @@ export const deleteGroupEndpoint = new Endpoint({
   path: '/groups/:groupId',
   method: EndpointMethod.DELETE,
   handler: deleteGroupHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: deleteGroupValidator,
 });
 
@@ -58,6 +58,6 @@ export const getGroupUsersEndpoint = new Endpoint({
   path: '/groups/:groupId/users',
   method: EndpointMethod.GET,
   handler: getGroupUsersHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: getGroupValidator,
 });

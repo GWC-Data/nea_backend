@@ -9,6 +9,7 @@ import {
 import bcrypt from 'bcryptjs';
 import { Response } from 'express';
 import { User } from 'db';
+import { Op } from 'sequelize';
 import {
   USER_NOT_FOUND,
   USER_CREATION_ERROR,
@@ -16,6 +17,19 @@ import {
   USER_DELETION_ERROR,
   USER_GET_ERROR
 } from './users.const';
+import {
+  REWARD_POINTS_PER_30_MINS,
+  BADGE_SILVER_HOURS,
+  BADGE_GOLD_HOURS,
+  BADGE_DIAMOND_HOURS,
+  CO2_PER_KG_WASTE
+} from '../event-logs/event-logs.const';
+
+// Helper function to get user ID from request bearer token
+const getUserIdFromRequest = (req: any): number | undefined => {
+  // node-server-engine attaches decoded JWT to req.decoded or req.user
+  return req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id;
+};
 
 // ✅ Create User (age, gender, groupId are optional)
 export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
@@ -57,9 +71,9 @@ export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
 };
 
 // ✅ Get All Users
-export const getAllUsersHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  _req,
-  res
+export const getAllUsersHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  _req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
 ) => {
   try {
     const users = await User.findAll({
@@ -78,15 +92,20 @@ export const getAllUsersHandler: EndpointHandler<EndpointAuthType.NONE> = async 
 };
 
 // ✅ Get User By ID
-export const getUserByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req,
-  res
+// ✅ Get User By ID (from bearer token - security: user can only access their own profile)
+export const getUserByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
 ): Promise<void> => {
+  const userId = getUserIdFromRequest(req);
 
-  const { id } = req.params;
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
 
   try {
-    const user = await User.findByPk(id, {
+    const user = await User.findByPk(userId, {
       attributes: { exclude: ['password'] },
       include: [
         { association: 'group',  attributes: ['groupId', 'groupName'] }
@@ -105,17 +124,21 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async 
   }
 };
 
-// ✅ Update User (all fields optional)
-export const updateUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req,
-  res
+// ✅ Update User (all fields optional) - extract userId from token
+export const updateUserHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
 ): Promise<void> => {
-
-  const { id } = req.params;
+  const userId = getUserIdFromRequest(req);
   const { name, email, role, age, gender, groupId } = req.body;
 
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
+
   try {
-    const user = await User.findByPk(id);
+    const user = await User.findByPk(userId);
 
     if (!user) {
       res.status(404).json({ message: USER_NOT_FOUND });
@@ -143,7 +166,7 @@ export const updateUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
     await user.update(updateData);
 
     // Get updated user without password
-    const updatedUser = await User.findByPk(id, {
+    const updatedUser = await User.findByPk(userId, {
       attributes: { exclude: ['password'] }
     });
 
@@ -154,16 +177,20 @@ export const updateUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   }
 };
 
-// ✅ Delete User
-export const deleteUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req,
-  res
+// ✅ Delete User - extract userId from token
+export const deleteUserHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
 ): Promise<void> => {
+  const userId = getUserIdFromRequest(req);
 
-  const { id } = req.params;
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
 
   try {
-    const user = await User.findByPk(id);
+    const user = await User.findByPk(userId);
 
     if (!user) {
       res.status(404).json({ message: USER_NOT_FOUND });
@@ -309,5 +336,213 @@ export const getUsersWithoutGroupHandler: EndpointHandler<EndpointAuthType.NONE>
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_GET_ERROR, error });
+  }
+};
+
+// ✅ Get User Profile (extract userId from token)
+export const getUserProfileHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const userId = getUserIdFromRequest(req);
+
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
+
+  try {
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'name', 'email', 'role', 'createdAt'],
+      include: [
+        {
+          association: 'eventLogs',
+          attributes: ['id', 'totalHours', 'garbageWeight', 'eventId', 'groupId', 'checkOutTime'],
+          where: { checkOutTime: { [Op.ne]: null } },
+          required: false
+        }
+      ]
+    });
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Calculate statistics
+    const eventLogs = user.eventLogs || [];
+    const totalTimeLogged = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+    const totalWasteCollected = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
+    const co2Collected = totalWasteCollected * CO2_PER_KG_WASTE;
+    const eventsJoined = new Set(eventLogs.map(log => log.eventId)).size;
+    const groupsJoined = new Set(eventLogs.map(log => log.groupId).filter(id => id !== null)).size;
+    const totalPoints = Math.floor((totalTimeLogged * 60) / 30) * REWARD_POINTS_PER_30_MINS;
+
+    // Determine badge
+    let overallBadge = null;
+    if (totalTimeLogged >= BADGE_DIAMOND_HOURS) {
+      overallBadge = 'diamond_champion';
+    } else if (totalTimeLogged >= BADGE_GOLD_HOURS) {
+      overallBadge = 'gold';
+    } else if (totalTimeLogged >= BADGE_SILVER_HOURS) {
+      overallBadge = 'silver';
+    }
+
+    const userProfile = {
+      userId: user.id,
+      userName: user.name,
+      email: user.email,
+      role: user.role,
+      totalWasteCollected: parseFloat(totalWasteCollected.toFixed(2)),
+      totalTimeLogged: parseFloat(totalTimeLogged.toFixed(2)),
+      totalMinutesLogged: Math.floor(totalTimeLogged * 60),
+      co2Collected: parseFloat(co2Collected.toFixed(2)),
+      eventsJoined: eventsJoined,
+      groupsJoined: groupsJoined,
+      totalPoints: totalPoints,
+      overallBadge: overallBadge,
+      completedActivities: eventLogs.length,
+      memberSince: user.createdAt
+    };
+
+    res.status(200).json({
+      message: 'User profile retrieved successfully',
+      userProfile
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching user profile', error });
+  }
+};
+
+// ✅ Get All Users Profiles
+export const getAllUsersProfileHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  _req: any,
+  res: Response
+): Promise<void> => {
+  try {
+    const users = await User.findAll({
+      attributes: ['id', 'name', 'email', 'role', 'createdAt'],
+      include: [
+        {
+          association: 'eventLogs',
+          attributes: ['id', 'totalHours', 'garbageWeight', 'eventId', 'groupId', 'checkOutTime'],
+          where: { checkOutTime: { [Op.ne]: null } },
+          required: false
+        }
+      ]
+    });
+
+    const usersProfile = users.map(user => {
+      const eventLogs = user.eventLogs || [];
+      const totalTimeLogged = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+      const totalWasteCollected = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
+      const co2Collected = totalWasteCollected * CO2_PER_KG_WASTE;
+      const eventsJoined = new Set(eventLogs.map(log => log.eventId)).size;
+      const groupsJoined = new Set(eventLogs.map(log => log.groupId).filter(id => id !== null)).size;
+      const totalPoints = Math.floor((totalTimeLogged * 60) / 30) * REWARD_POINTS_PER_30_MINS;
+
+      let overallBadge = null;
+      if (totalTimeLogged >= BADGE_DIAMOND_HOURS) {
+        overallBadge = 'diamond_champion';
+      } else if (totalTimeLogged >= BADGE_GOLD_HOURS) {
+        overallBadge = 'gold';
+      } else if (totalTimeLogged >= BADGE_SILVER_HOURS) {
+        overallBadge = 'silver';
+      }
+
+      return {
+        userId: user.id,
+        userName: user.name,
+        email: user.email,
+        totalWasteCollected: parseFloat(totalWasteCollected.toFixed(2)),
+        totalTimeLogged: parseFloat(totalTimeLogged.toFixed(2)),
+        co2Collected: parseFloat(co2Collected.toFixed(2)),
+        eventsJoined: eventsJoined,
+        groupsJoined: groupsJoined,
+        totalPoints: totalPoints,
+        overallBadge: overallBadge,
+        completedActivities: eventLogs.length
+      };
+    });
+
+    // Sort by total points descending
+    usersProfile.sort((a, b) => b.totalPoints - a.totalPoints);
+
+    res.status(200).json({
+      message: 'All users profiles retrieved successfully',
+      totalUsers: usersProfile.length,
+      usersProfile
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching users profiles', error });
+  }
+};
+
+// ✅ Get User Leaderboard
+export const getUserLeaderboardHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  req: any,
+  res: Response
+): Promise<void> => {
+  try {
+    const { limit = 10, sortBy = 'totalPoints' } = req.query;
+
+    const users = await User.findAll({
+      attributes: ['id', 'name', 'email'],
+      include: [
+        {
+          association: 'eventLogs',
+          attributes: ['id', 'totalHours', 'garbageWeight', 'eventId', 'groupId', 'checkOutTime'],
+          where: { checkOutTime: { [Op.ne]: null } },
+          required: false
+        }
+      ]
+    });
+
+    const usersLeaderboard = users.map((user, index) => {
+      const eventLogs = user.eventLogs || [];
+      const totalTimeLogged = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+      const totalWasteCollected = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
+      const totalPoints = Math.floor((totalTimeLogged * 60) / 30) * REWARD_POINTS_PER_30_MINS;
+
+      return {
+        rank: index + 1,
+        userId: user.id,
+        userName: user.name,
+        email: user.email,
+        totalPoints: totalPoints,
+        totalTimeLogged: parseFloat(totalTimeLogged.toFixed(2)),
+        totalWasteCollected: parseFloat(totalWasteCollected.toFixed(2)),
+        eventsJoined: new Set(eventLogs.map(log => log.eventId)).size
+      };
+    });
+
+    // Sort by specified field
+    if (sortBy === 'totalWaste') {
+      usersLeaderboard.sort((a, b) => b.totalWasteCollected - a.totalWasteCollected);
+    } else if (sortBy === 'totalTime') {
+      usersLeaderboard.sort((a, b) => b.totalTimeLogged - a.totalTimeLogged);
+    } else {
+      usersLeaderboard.sort((a, b) => b.totalPoints - a.totalPoints);
+    }
+
+    // Reassign ranks after sorting
+    usersLeaderboard.forEach((user, index) => {
+      user.rank = index + 1;
+    });
+
+    const limitNum = Math.min(parseInt(limit, 10) || 10, usersLeaderboard.length);
+    const topUsers = usersLeaderboard.slice(0, limitNum);
+
+    res.status(200).json({
+      message: 'User leaderboard retrieved successfully',
+      sortedBy: sortBy,
+      totalUsers: usersLeaderboard.length,
+      topUsers
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching leaderboard', error });
   }
 };

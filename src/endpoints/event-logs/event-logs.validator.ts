@@ -1,6 +1,15 @@
 import { EventLogs, EventTable, User } from 'db';
 import { Schema } from 'express-validator';
 
+/**
+ * Validator for creating event logs (check in)
+ * 
+ * FILE UPLOAD:
+ * - Optional: wasteImage (multipart/form-data)
+ * - Supported formats: .jpg, .jpeg, .png, .gif, .webp
+ * - Max file size: 10MB
+ * - Upload via form field: "wasteImage"
+ */
 export const createEventLogValidator: Schema = {
     eventId: {
         in: 'body',
@@ -15,24 +24,6 @@ export const createEventLogValidator: Schema = {
                 const event = await EventTable.findByPk(value);
                 if (!event) {
                     throw new Error('Event does not exist');
-                }
-                return true;
-            }
-        }
-    },
-    userId: {
-        in: 'body',
-        exists: {
-            errorMessage: 'User ID is required',
-        },
-        isInt: {
-            errorMessage: 'User ID must be an integer',
-        },
-        custom: {
-            options: async (value) => {
-                const user = await User.findByPk(value);
-                if (!user) {
-                    throw new Error('User does not exist');
                 }
                 return true;
             }
@@ -73,6 +64,16 @@ export const createEventLogValidator: Schema = {
     }
 };
 
+/**
+ * Validator for updating event logs (check out)
+ * 
+ * FILE UPLOAD:
+ * - Optional: wasteImage (multipart/form-data)
+ * - Supported formats: .jpg, .jpeg, .png, .gif, .webp
+ * - Max file size: 10MB
+ * - Upload via form field: "wasteImage"
+ * - If a new image is uploaded, previous image will be deleted
+ */
 export const updateEventLogValidator: Schema = {
     id: {
         in: 'params',

@@ -2,11 +2,12 @@
 
 import {
   EndpointAuthType,
-  EndpointRequestType,
+  // EndpointRequestType,
   EndpointHandler,
   reportError
 } from 'node-server-engine';
 import { Response } from 'express';
+// import { Request } from 'express';
 import { EventLogs, User } from 'db';
 import {
   EVENT_LOG_NOT_FOUND,
@@ -23,6 +24,7 @@ import {
   BADGE_MESSAGES
 } from './event-logs.const';
 import { Op } from 'sequelize';
+import { deleteImageFile, getRelativeImagePath } from 'config/multerConfig';
 
 // Helper function to calculate rewards
 function calculateRewards(totalHours: number): { points: number; badge: string | null; message: string | null } {
@@ -46,6 +48,12 @@ function calculateRewards(totalHours: number): { points: number; badge: string |
   return { points, badge, message };
 }
 
+// Helper function to get user ID from request bearer token
+const getUserIdFromRequest = (req: any): number | undefined => {
+  // node-server-engine attaches decoded JWT to req.decoded or req.user
+  return req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id;
+};
+
 // Helper function to get user's total hours
 async function getUserTotalHours(userId: number): Promise<number> {
   const eventLogs = await EventLogs.findAll({
@@ -60,13 +68,18 @@ async function getUserTotalHours(userId: number): Promise<number> {
 }
 
 // ✅ Create Event Log (Check In)
-export const createEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req: EndpointRequestType[EndpointAuthType.NONE],
+export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: any,
   res: Response
 ): Promise<void> => {
-  const { eventId, userId, groupId, checkInTime, garbageWeight, garbageType } = req.body;
+  const { eventId, groupId, checkInTime, garbageWeight, garbageType } = req.body;
+  const userId = getUserIdFromRequest(req);
 
   try {
+    if (!userId) {
+      res.status(401).json({ message: 'User ID not found in token' });
+      return;
+    }
     // Check if groupId column exists in EventLogs table
     const attributes = Object.keys(EventLogs.getAttributes());
     const hasGroupIdColumn = attributes.includes('groupId');
@@ -93,12 +106,21 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
       checkOutTime: null,
       totalHours: 0,
       garbageWeight: garbageWeight || 0,
-      garbageType: garbageType || null
+      garbageType: garbageType || null,
+      wasteImage: null
     };
     
-    // Only add groupId if the column exists
-    if (hasGroupIdColumn && groupId) {
-      eventLogData.groupId = groupId;
+    // Only add groupId if the column exists and is a valid value
+    if (hasGroupIdColumn && groupId && groupId !== 'null' && groupId !== null) {
+      const groupIdNum = parseInt(groupId, 10);
+      if (!isNaN(groupIdNum)) {
+        eventLogData.groupId = groupIdNum;
+      }
+    }
+
+    // Handle waste image if uploaded
+    if (req.file) {
+      eventLogData.wasteImage = getRelativeImagePath(req.file.path);
     }
 
     const newEventLog = await EventLogs.create(eventLogData);
@@ -117,13 +139,17 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
       eventLog: createdEventLog
     });
   } catch (error) {
+    // Delete uploaded file if there's an error
+    if (req.file) {
+      deleteImageFile(req.file.path);
+    }
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_CREATION_ERROR, error });
   }
 };
 
 // ✅ Get All Event Logs
-export const getAllEventLogsHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const getAllEventLogsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   _req,
   res
 ): Promise<void> => {
@@ -145,7 +171,7 @@ export const getAllEventLogsHandler: EndpointHandler<EndpointAuthType.NONE> = as
 };
 
 // ✅ Get Event Log By ID
-export const getEventLogByIdHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const getEventLogByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
@@ -173,9 +199,9 @@ export const getEventLogByIdHandler: EndpointHandler<EndpointAuthType.NONE> = as
 };
 
 // ✅ Update Event Log (Check Out) with Rewards
-export const updateEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req,
-  res
+export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: any,
+  res: Response
 ): Promise<void> => {
   const { id } = req.params;
   const { checkOutTime, garbageWeight, garbageType } = req.body;
@@ -211,12 +237,23 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
       // Calculate total rewards (cumulative)
       const totalRewards = calculateRewards(newTotalHours);
 
-      await eventLog.update({
+      const updateData: any = {
         checkOutTime: checkOutDate,
         totalHours: sessionHours,
         garbageWeight: garbageWeight !== undefined ? garbageWeight : eventLog.garbageWeight,
         garbageType: garbageType !== undefined ? garbageType : eventLog.garbageType
-      });
+      };
+
+      // Handle waste image upload
+      if (req.file) {
+        // Delete old image if exists
+        if (eventLog.wasteImage) {
+          deleteImageFile(eventLog.wasteImage);
+        }
+        updateData.wasteImage = getRelativeImagePath(req.file.path);
+      }
+
+      await eventLog.update(updateData);
 
       // Get updated event log with associations
       const updatedEventLog = await EventLogs.findByPk(id, {
@@ -253,6 +290,15 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
       if (garbageWeight !== undefined) updateData.garbageWeight = garbageWeight;
       if (garbageType !== undefined) updateData.garbageType = garbageType;
 
+      // Handle waste image upload
+      if (req.file) {
+        // Delete old image if exists
+        if (eventLog.wasteImage) {
+          deleteImageFile(eventLog.wasteImage);
+        }
+        updateData.wasteImage = getRelativeImagePath(req.file.path);
+      }
+
       await eventLog.update(updateData);
       
       const updatedEventLog = await EventLogs.findByPk(id, {
@@ -266,13 +312,17 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
       res.status(200).json({ message: 'Event log updated successfully', eventLog: updatedEventLog });
     }
   } catch (error) {
+    // Delete uploaded file if there's an error
+    if (req.file) {
+      deleteImageFile(req.file.path);
+    }
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_UPDATE_ERROR, error });
   }
 };
 
 // ✅ Delete Event Log
-export const deleteEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const deleteEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
@@ -286,6 +336,11 @@ export const deleteEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
       return;
     }
 
+    // Delete associated waste image if exists
+    if (eventLog.wasteImage) {
+      deleteImageFile(eventLog.wasteImage);
+    }
+
     await eventLog.destroy();
 
     res.status(200).json({ message: 'Event log deleted successfully' });
@@ -295,12 +350,17 @@ export const deleteEventLogHandler: EndpointHandler<EndpointAuthType.NONE> = asy
   }
 };
 
-// ✅ Get Event Logs by User
-export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+// ✅ Get Event Logs by User (extract userId from token)
+export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
-  res
+  res: Response
 ): Promise<void> => {
-  const { userId } = req.params;
+  const userId = getUserIdFromRequest(req);
+
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
 
   try {
     const eventLogs = await EventLogs.findAll({
@@ -337,7 +397,7 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.NONE> =
 };
 
 // ✅ Get Event Logs by Event
-export const getEventLogsByEventHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const getEventLogsByEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
@@ -373,12 +433,18 @@ export const getEventLogsByEventHandler: EndpointHandler<EndpointAuthType.NONE> 
   }
 };
 
-// ✅ Get User Event Logs by Date
-export const getUserEventLogsByDateHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+// ✅ Get User Event Logs by Date (extract userId from token)
+export const getUserEventLogsByDateHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
-  const { userId, date } = req.params;
+  const { date } = req.params;
+  const userId = getUserIdFromRequest(req);
+
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
 
   try {
     const startDate = new Date(date);
@@ -420,7 +486,7 @@ export const getUserEventLogsByDateHandler: EndpointHandler<EndpointAuthType.NON
 };
 
 // ✅ Get Event Logs by Date Range
-export const getEventLogsByDateRangeHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const getEventLogsByDateRangeHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
@@ -471,12 +537,17 @@ export const getEventLogsByDateRangeHandler: EndpointHandler<EndpointAuthType.NO
   }
 };
 
-// ✅ Get User Rewards Summary
-export const getUserRewardsSummaryHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+// ✅ Get User Rewards Summary (extract userId from token)
+export const getUserRewardsSummaryHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req,
   res
 ): Promise<void> => {
-  const { userId } = req.params;
+  const userId = getUserIdFromRequest(req);
+
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
 
   try {
     const user = await User.findByPk(userId, {

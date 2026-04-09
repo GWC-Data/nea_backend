@@ -6,7 +6,10 @@ import {
   getUserByIdHandler,
   createUserHandler,
   updateUserHandler,
-  deleteUserHandler
+  deleteUserHandler,
+  getUserProfileHandler,
+  getAllUsersProfileHandler,
+  getUserLeaderboardHandler
 } from './users.handler';
 
 export const createUserEndpoint = new Endpoint({
@@ -22,34 +25,59 @@ export const getAllUserEndpoint = new Endpoint({
   path: '/users',
   method: EndpointMethod.GET,
   handler: getAllUsersHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: {},
   // middleware: [middleware.checkPermission('GetUser')]
 });
 
 export const getUserByIdEndpoint = new Endpoint({
-  path: '/users/:id',
+  path: '/users/details',
   method: EndpointMethod.GET,
   handler: getUserByIdHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: {},
   // middleware: [middleware.checkPermission('GetUser')]
 });
 
 export const updateUserEndpoint = new Endpoint({
-  path: '/users/:id',
+  path: '/users',
   method: EndpointMethod.PUT,
   handler: updateUserHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: updateUserValidator,
   // middleware: [middleware.checkPermission('UpdateUser')]
 });
 
 export const deleteUserEndpoint = new Endpoint({
-  path: '/users/:id',
+  path: '/users',
   method: EndpointMethod.DELETE,
   handler: deleteUserHandler,
-  authType: EndpointAuthType.NONE,
+  authType: EndpointAuthType.JWT,
   validator: {},
   // middleware: [middleware.checkPermission('DeleteUser')]
+});
+
+// User Profile Endpoints
+export const getUserProfileEndpoint = new Endpoint({
+  path: '/users/profile',
+  method: EndpointMethod.GET,
+  handler: getUserProfileHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+export const getAllUsersProfileEndpoint = new Endpoint({
+  path: '/users-profiles',
+  method: EndpointMethod.GET,
+  handler: getAllUsersProfileHandler,
+  authType: EndpointAuthType.NONE,
+  validator: {},
+});
+
+export const getUserLeaderboardEndpoint = new Endpoint({
+  path: '/users/leaderboard/top',
+  method: EndpointMethod.GET,
+  handler: getUserLeaderboardHandler,
+  authType: EndpointAuthType.NONE,
+  validator: {},
 });

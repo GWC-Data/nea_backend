@@ -15,6 +15,7 @@ export const REWARD_POINTS_PER_30_MINS = 5;
 export const BADGE_SILVER_HOURS = 5;
 export const BADGE_GOLD_HOURS = 10;
 export const BADGE_DIAMOND_HOURS = 15;
+export const CO2_PER_KG_WASTE = 0.5;
 
 // Badge messages
 export const BADGE_MESSAGES = {
