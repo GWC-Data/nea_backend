@@ -51,7 +51,7 @@ function calculateRewards(totalHours: number): { points: number; badge: string |
 // Helper function to get user ID from request bearer token
 const getUserIdFromRequest = (req: any): number | undefined => {
   // node-server-engine attaches decoded JWT to req.decoded or req.user
-  return req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id;
+  return (req as any).decoded?.id || (req as any).user?.id || (req as any).token?.id || (req as any).decodedToken?.id;
 };
 
 // Helper function to get user's total hours
@@ -357,12 +357,17 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
 ): Promise<void> => {
   const userId = getUserIdFromRequest(req);
 
+  // console.log('🔍 [getEventLogsByUserHandler] Extracted userId:', userId);
+
   if (!userId) {
+    // console.log('❌ [getEventLogsByUserHandler] No userId found in token');
     res.status(401).json({ message: 'User ID not found in token' });
     return;
   }
 
   try {
+    // console.log(`📊 [getEventLogsByUserHandler] Querying EventLogs with userId = ${userId}`);
+    
     const eventLogs = await EventLogs.findAll({
       where: { userId },
       include: [
@@ -372,6 +377,29 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
       order: [['checkInTime', 'DESC']]
     });
 
+    // console.log(`✅ [getEventLogsByUserHandler] Query returned ${eventLogs?.length || 0} records`);
+    if (eventLogs?.length > 0) {
+      // console.log('📝 [getEventLogsByUserHandler] First record:', JSON.stringify(eventLogs[0], null, 2));
+    }
+
+    // Check if user has any event logs
+    if (!eventLogs || eventLogs.length === 0) {
+      // console.log('⚠️ [getEventLogsByUserHandler] No event logs found for userId:', userId);
+      res.status(200).json({
+        message: 'No event logs found for this user',
+        eventLogs: [],
+        stats: {
+          totalHours: '0.00',
+          totalMinutes: 0,
+          totalPoints: 0,
+          completedEvents: 0,
+          currentBadge: null,
+          badgeMessage: null
+        }
+      });
+      return;
+    }
+
     // Calculate user's total stats
     const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
     const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
@@ -379,7 +407,10 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
     
     const rewards = calculateRewards(totalHours);
 
+    // console.log('✅ [getEventLogsByUserHandler] Sending response with', eventLogs.length, 'event logs');
+
     res.status(200).json({ 
+      message: 'Event logs retrieved successfully',
       eventLogs,
       stats: {
         totalHours: totalHours.toFixed(2),
@@ -391,6 +422,7 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
       }
     });
   } catch (error) {
+    console.log('❌ [getEventLogsByUserHandler] Error:', error);
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_GET_ERROR, error });
   }

@@ -15,6 +15,7 @@ import {
   getUserRewardsSummaryHandler
 } from './event-logs.handler';
 
+// ✅ POST - Must be first to avoid conflicts
 export const createEventLogEndpoint = new Endpoint({
   path: '/event-logs',
   method: EndpointMethod.POST,
@@ -24,14 +25,54 @@ export const createEventLogEndpoint = new Endpoint({
   middleware: [wasteImageUpload.single('wasteImage')]
 });
 
-export const getAllEventLogsEndpoint = new Endpoint({
-  path: '/event-logs',
+// ✅ MORE SPECIFIC ROUTES BEFORE GENERIC ONES - Critical for routing!
+// Specific path: /event-logs/user/rewards
+export const getUserRewardsSummaryEndpoint = new Endpoint({
+  path: '/event-logs/user/rewards',
   method: EndpointMethod.GET,
-  handler: getAllEventLogsHandler,
+  handler: getUserRewardsSummaryHandler,
   authType: EndpointAuthType.JWT,
   validator: {},
 });
 
+// Specific path: /event-logs/user/date/:date
+export const getUserEventLogsByDateEndpoint = new Endpoint({
+  path: '/event-logs/user/date/:date',
+  method: EndpointMethod.GET,
+  handler: getUserEventLogsByDateHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+// Specific path: /event-logs/user
+export const getEventLogsByUserEndpoint = new Endpoint({
+  path: '/event-logs/user',
+  method: EndpointMethod.GET,
+  handler: getEventLogsByUserHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+// Specific path: /event-logs/event/:eventId
+export const getEventLogsByEventEndpoint = new Endpoint({
+  path: '/event-logs/event/:eventId',
+  method: EndpointMethod.GET,
+  handler: getEventLogsByEventHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+// Specific path: /event-logs/date-range
+export const getEventLogsByDateRangeEndpoint = new Endpoint({
+  path: '/event-logs/date-range',
+  method: EndpointMethod.POST,
+  handler: getEventLogsByDateRangeHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+// GENERIC ROUTES - Must be last to avoid shadowing specific routes
+// Generic path: /event-logs/:id (GET, PUT, DELETE)
 export const getEventLogByIdEndpoint = new Endpoint({
   path: '/event-logs/:id',
   method: EndpointMethod.GET,
@@ -57,42 +98,26 @@ export const deleteEventLogEndpoint = new Endpoint({
   validator: {},
 });
 
-export const getEventLogsByUserEndpoint = new Endpoint({
-  path: '/event-logs/user',
+// Generic path: /event-logs (GET all)
+export const getAllEventLogsEndpoint = new Endpoint({
+  path: '/event-logs',
   method: EndpointMethod.GET,
-  handler: getEventLogsByUserHandler,
+  handler: getAllEventLogsHandler,
   authType: EndpointAuthType.JWT,
   validator: {},
 });
 
-export const getEventLogsByEventEndpoint = new Endpoint({
-  path: '/event-logs/event/:eventId',
-  method: EndpointMethod.GET,
-  handler: getEventLogsByEventHandler,
-  authType: EndpointAuthType.JWT,
-  validator: {},
-});
-
-export const getUserEventLogsByDateEndpoint = new Endpoint({
-  path: '/event-logs/user/date/:date',
-  method: EndpointMethod.GET,
-  handler: getUserEventLogsByDateHandler,
-  authType: EndpointAuthType.JWT,
-  validator: {},
-});
-
-export const getEventLogsByDateRangeEndpoint = new Endpoint({
-  path: '/event-logs/date-range',
-  method: EndpointMethod.POST,
-  handler: getEventLogsByDateRangeHandler,
-  authType: EndpointAuthType.JWT,
-  validator: {},
-});
-
-export const getUserRewardsSummaryEndpoint = new Endpoint({
-  path: '/event-logs/user/rewards',
-  method: EndpointMethod.GET,
-  handler: getUserRewardsSummaryHandler,
-  authType: EndpointAuthType.JWT,
-  validator: {},
-});
+// ✅ EXPORT IN PRIORITY ORDER - This ensures routes are matched correctly
+// Specific paths MUST come before generic paths with parameters
+export const orderedEventLogsEndpoints = [
+  createEventLogEndpoint, // POST /event-logs
+  getUserRewardsSummaryEndpoint, // GET /event-logs/user/rewards (most specific)
+  getUserEventLogsByDateEndpoint, // GET /event-logs/user/date/:date
+  getEventLogsByUserEndpoint, // GET /event-logs/user ✅ CRITICAL - before /:id
+  getEventLogsByEventEndpoint, // GET /event-logs/event/:eventId
+  getEventLogsByDateRangeEndpoint, // POST /event-logs/date-range
+  getEventLogByIdEndpoint, // GET /event-logs/:id (generic - MUST be last)
+  updateEventLogEndpoint, // PUT /event-logs/:id
+  deleteEventLogEndpoint, // DELETE /event-logs/:id
+  getAllEventLogsEndpoint, // GET /event-logs
+];

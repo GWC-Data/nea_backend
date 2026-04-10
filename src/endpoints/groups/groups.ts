@@ -22,14 +22,16 @@ export const createGroupEndpoint = new Endpoint({
   validator: createGroupValidator,
 });
 
-export const getAllGroupsEndpoint = new Endpoint({
-  path: '/groups',
+// ✅ MORE SPECIFIC ROUTES BEFORE GENERIC ONES
+export const getGroupUsersEndpoint = new Endpoint({
+  path: '/groups/:groupId/users',
   method: EndpointMethod.GET,
-  handler: getAllGroupsHandler,
+  handler: getGroupUsersHandler,
   authType: EndpointAuthType.JWT,
-  validator: {},
+  validator: getGroupValidator,
 });
 
+// GENERIC ROUTES - Must be last
 export const getGroupByIdEndpoint = new Endpoint({
   path: '/groups/:groupId',
   method: EndpointMethod.GET,
@@ -54,10 +56,10 @@ export const deleteGroupEndpoint = new Endpoint({
   validator: deleteGroupValidator,
 });
 
-export const getGroupUsersEndpoint = new Endpoint({
-  path: '/groups/:groupId/users',
+export const getAllGroupsEndpoint = new Endpoint({
+  path: '/groups',
   method: EndpointMethod.GET,
-  handler: getGroupUsersHandler,
+  handler: getAllGroupsHandler,
   authType: EndpointAuthType.JWT,
-  validator: getGroupValidator,
+  validator: {},
 });
