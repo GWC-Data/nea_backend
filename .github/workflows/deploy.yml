@@ -35,16 +35,16 @@ jobs:
         run: |
           cd /home/shanmugavel/backend
 
+          # Ensure pm2 is available
+          export PATH=$PATH:/home/shanmugavel/.npm-global/bin
+
           pm2 describe backend > /dev/null 2>&1
 
           if [ $? -eq 0 ]; then
             pm2 restart backend
           else
-            pm2 start ./dist/index.js \
-              --name "backend" \
-              --interpreter ./node_modules/.bin/nodemon \
-              --node-args="-r @babel/register -r ./env/config.js" \
-              --watch
+            pm2 start dist/index.js --name backend \
+              --node-args="-r @babel/register -r ./env/config.js"
           fi
 
           pm2 save
