@@ -13,7 +13,9 @@ import {
   getUserJoinedEventsHandler,
   getPopularEventsHandler,
   getEventProfileHandler,
-  getAllEventsProfileHandler
+  getAllEventsProfileHandler,
+  getLeaderboardHandler,
+  getDashboardHandler
 } from './events.handler';
 
 // All endpoints require JWT authentication
@@ -91,6 +93,23 @@ export const getEventProfileEndpoint = new Endpoint({
   method: EndpointMethod.GET,
   handler: getEventProfileHandler,
   authType: EndpointAuthType.NONE,
+  validator: {},
+});
+
+// ✅ Dashboard and Leaderboard endpoints
+export const getDashboardEndpoint = new Endpoint({
+  path: '/dashboard',
+  method: EndpointMethod.GET,
+  handler: getDashboardHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+export const getLeaderboardEndpoint = new Endpoint({
+  path: '/leaderboard',
+  method: EndpointMethod.GET,
+  handler: getLeaderboardHandler,
+  authType: EndpointAuthType.JWT,
   validator: {},
 });
 

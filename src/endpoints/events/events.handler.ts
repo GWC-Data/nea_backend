@@ -203,13 +203,32 @@ export const getEventsByDateHandler: EndpointHandler<EndpointAuthType.JWT> = asy
   const { date } = req.params;
 
   try {
+    console.log('📅 [getEventsByDateHandler] Querying events for date:', date);
+    
+    // Parse the date (format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS)
+    const queryDate = new Date(date);
+    queryDate.setHours(0, 0, 0, 0);
+    
+    const nextDate = new Date(queryDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    console.log('   Start:', queryDate, 'End:', nextDate);
+
     const events = await EventTable.findAll({
-      where: { date },
+      where: {
+        date: {
+          [Op.gte]: queryDate,
+          [Op.lt]: nextDate
+        }
+      },
       order: [['date', 'ASC']]
     });
 
+    console.log(`✅ Found ${events.length} events for date ${date}`);
+
     res.status(200).json({ events });
   } catch (error) {
+    console.log('❌ Error in getEventsByDateHandler:', error);
     reportError(error);
     res.status(500).json({ message: EVENT_GET_ERROR, error });
   }
@@ -642,5 +661,145 @@ export const getAllEventsProfileHandler: EndpointHandler<EndpointAuthType.NONE> 
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: 'Error fetching events profiles', error });
+  }
+};
+
+// ✅ Get Leaderboard (Event-based)
+export const getLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  _req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  try {
+    console.log('🏆 [getLeaderboardHandler] Fetching leaderboard');
+
+    // Get all events with their participant counts
+    const events = await EventTable.findAll({
+      include: [
+        {
+          association: 'eventLogs',
+          attributes: ['id', 'userId', 'totalHours']
+        }
+      ],
+      order: [['joinsCount', 'DESC']]
+    });
+
+    // Build leaderboard: rank events by participation
+    const leaderboard = events
+      .filter(event => (event.eventLogs?.length || 0) > 0)
+      .map((event, index) => ({
+        rank: index + 1,
+        eventId: event.eventId,
+        eventName: event.name,
+        location: event.location,
+        date: event.date,
+        description: event.description,
+        rewards: event.rewards,
+        totalParticipants: event.joinsCount,
+        totalHours: (event.eventLogs || []).reduce((sum, log) => sum + (log.totalHours || 0), 0),
+        participantIds: (event.eventLogs || []).map(log => log.userId)
+      }));
+
+    console.log(`✅ Leaderboard has ${leaderboard.length} events`);
+
+    res.status(200).json({
+      message: 'Leaderboard retrieved successfully',
+      leaderboard
+    });
+  } catch (error) {
+    console.log('❌ Error in getLeaderboardHandler:', error);
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching leaderboard', error });
+  }
+};
+
+// ✅ Get Dashboard (User Profile with Full Event Details)
+export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const userId = getUserIdFromRequest(req);
+
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
+
+  try {
+    console.log(`📊 [getDashboardHandler] Fetching dashboard for userId: ${userId}`);
+
+    // Get user details
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'name', 'email', 'role', 'joinedEvents']
+    });
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Parse joinedEvents array
+    let joinedEventsList = user.joinedEvents;
+    if (typeof joinedEventsList === 'string') {
+      joinedEventsList = JSON.parse(joinedEventsList);
+    }
+
+    // Get full event details for each joined event
+    const eventIds = (joinedEventsList || []).map((e: any) => e.eventId || e);
+    
+    let eventsJoinedWithDetails: any[] = [];
+    if (eventIds.length > 0) {
+      const fullEvents = await EventTable.findAll({
+        where: {
+          eventId: {
+            [Op.in]: eventIds
+          }
+        },
+        attributes: ['eventId', 'name', 'location', 'date', 'description', 'joinsCount', 'rewards']
+      });
+
+      eventsJoinedWithDetails = fullEvents.map(event => ({
+        id: event.eventId,
+        name: event.name,
+        location: event.location,
+        date: event.date,
+        description: event.description,
+        totalParticipants: event.joinsCount,
+        rewards: event.rewards
+      }));
+    }
+
+    // Get user's event logs stats
+    const { EventLogs } = require('db');
+    const eventLogs = await EventLogs.findAll({
+      where: { userId },
+      attributes: ['id', 'totalHours', 'checkOutTime', 'garbageWeight']
+    });
+
+    const totalHours = eventLogs.reduce((sum: number, log: any) => sum + (log.totalHours || 0), 0);
+    const completedEvents = eventLogs.filter((log: any) => log.checkOutTime).length;
+    const totalGarbageCollected = eventLogs.reduce((sum: number, log: any) => sum + (log.garbageWeight || 0), 0);
+
+    console.log(`✅ Dashboard data: ${eventsJoinedWithDetails.length} events, ${totalHours} hours`);
+
+    res.status(200).json({
+      message: 'Dashboard retrieved successfully',
+      profile: {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      stats: {
+        eventsJoined: eventsJoinedWithDetails.length,
+        completedEvents,
+        totalHours: totalHours.toFixed(2),
+        totalGarbageCollected: totalGarbageCollected.toFixed(2)
+      },
+      eventsJoined: eventsJoinedWithDetails
+    });
+  } catch (error) {
+    console.log('❌ Error in getDashboardHandler:', error);
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching dashboard', error });
   }
 };
