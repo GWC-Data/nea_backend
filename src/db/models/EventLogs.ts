@@ -100,11 +100,11 @@ export class EventLogs extends Model {
   declare updatedAt: Date;
 
   // Associations
-  @BelongsTo(() => EventTable, { foreignKey: 'eventId', as: 'event' })
-  event!: EventTable;
-
   @BelongsTo(() => User, { foreignKey: 'userId', as: 'user' })
   user!: User;
+
+  @BelongsTo(() => EventTable, { foreignKey: 'eventId', as: 'event' })
+  event!: EventTable;
 
   @BelongsTo(() => GroupTable, { foreignKey: 'groupId', as: 'group' })
   group!: GroupTable;

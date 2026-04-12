@@ -15,8 +15,10 @@ import {
   getEventProfileHandler,
   getAllEventsProfileHandler,
   getLeaderboardHandler,
-  getDashboardHandler
+  getDashboardHandler,
+  getEventLeaderboardHandler
 } from './events.handler';
+import { eventImageUpload } from 'config/multerConfig';
 
 // All endpoints require JWT authentication
 
@@ -26,6 +28,7 @@ export const createEventEndpoint = new Endpoint({
   method: EndpointMethod.POST,
   handler: createEventHandler,
   authType: EndpointAuthType.JWT,
+  middleware: [eventImageUpload.single('eventImage')],
   validator: {},
 });
 
@@ -69,6 +72,7 @@ export const joinEventEndpoint = new Endpoint({
   method: EndpointMethod.POST,
   handler: joinEventHandler,
   authType: EndpointAuthType.JWT,
+  middleware: [eventImageUpload.single('eventImage')],
   validator: {},
 });
 
@@ -109,6 +113,14 @@ export const getLeaderboardEndpoint = new Endpoint({
   path: '/leaderboard',
   method: EndpointMethod.GET,
   handler: getLeaderboardHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+export const getEventLeaderboardEndpoint = new Endpoint({
+  path: '/events/:eventId/leaderboard',
+  method: EndpointMethod.GET,
+  handler: getEventLeaderboardHandler,
   authType: EndpointAuthType.JWT,
   validator: {},
 });

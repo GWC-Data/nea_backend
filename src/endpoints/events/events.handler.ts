@@ -5,7 +5,7 @@ import {
   reportError
 } from 'node-server-engine';
 import { Response } from 'express';
-import { EventTable, User } from 'db';
+import { EventTable, User, EventLogs } from 'db';
 import {
   EVENT_NOT_FOUND,
   EVENT_CREATION_ERROR,
@@ -16,6 +16,7 @@ import {
   USER_NOT_FOUND as USER_NOT_FOUND_ERROR
 } from './events.const';
 import { Op } from 'sequelize';
+import { getRelativeImagePath} from 'config/multerConfig';
 
 // Helper function to get user ID from request
 const getUserIdFromRequest = (req: any): number | undefined => {
@@ -37,6 +38,12 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
+    // Validate required fields
+    if (!date || !location || !name) {
+      res.status(400).json({ message: 'date, location, and name are required' });
+      return;
+    }
+
     // Check if event date is in the past
     const eventDate = new Date(date);
     const today = new Date();
@@ -47,6 +54,13 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
+    // Handle event image upload
+    let eventImagePath = null;
+    if ((req as any).file) {
+      eventImagePath = getRelativeImagePath((req as any).file.path);
+      console.log('📸 Event image uploaded:', eventImagePath);
+    }
+
     const newEvent = await EventTable.create({
       date,
       location,
@@ -54,13 +68,16 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       details: details || null,
       description: description || null,
       rewards: rewards || null,
+      event_image: eventImagePath,
       joinsCount: 0,
       participants: [],
       createdBy: createdBy
     });
 
+    console.log('✅ Event created:', newEvent.eventId);
     res.status(200).json({ message: 'Event created successfully', event: newEvent });
   } catch (error) {
+    console.log('❌ Error in createEventHandler:', error);
     reportError(error);
     res.status(500).json({ message: EVENT_CREATION_ERROR, error });
   }
@@ -342,6 +359,13 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
+    // Handle image upload if provided
+    let eventImagePath = null;
+    if ((req as any).file) {
+      eventImagePath = getRelativeImagePath((req as any).file.path);
+      console.log('📸 Event image uploaded:', eventImagePath);
+    }
+
     // Add user object to participants array
     const participantObject = {
       userId: user.id,
@@ -353,20 +377,22 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     const updatedParticipants = [...participantsArray, participantObject];
     const participantsJSON = JSON.stringify(updatedParticipants);
 
-    // Update EventTable
-    await sequelize!.query(
-      `UPDATE EventTable 
-       SET participants = :participants, 
-           joinsCount = :joinsCount 
-       WHERE eventId = :eventId`,
-      {
-        replacements: {
-          participants: participantsJSON,
-          joinsCount: updatedParticipants.length,
-          eventId: eventId
-        }
-      }
-    );
+    // Update EventTable with image if provided
+    const updateQuery = eventImagePath
+      ? `UPDATE EventTable SET participants = :participants, joinsCount = :joinsCount, event_image = :event_image WHERE eventId = :eventId`
+      : `UPDATE EventTable SET participants = :participants, joinsCount = :joinsCount WHERE eventId = :eventId`;
+    
+    const replacements: any = {
+      participants: participantsJSON,
+      joinsCount: updatedParticipants.length,
+      eventId: eventId
+    };
+    
+    if (eventImagePath) {
+      replacements.event_image = eventImagePath;
+    }
+
+    await sequelize!.query(updateQuery, { replacements });
 
     // Update user's joined events
     const [userData] = await sequelize!.query(
@@ -754,32 +780,36 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
             [Op.in]: eventIds
           }
         },
-        attributes: ['eventId', 'name', 'location', 'date', 'description', 'joinsCount', 'rewards']
+        attributes: ['eventId', 'name', 'location', 'date', 'joinsCount', 'event_image']
       });
 
       eventsJoinedWithDetails = fullEvents.map(event => ({
-        id: event.eventId,
-        name: event.name,
+        eventId: event.eventId,
+        eventName: event.name,
         location: event.location,
-        date: event.date,
-        description: event.description,
-        totalParticipants: event.joinsCount,
-        rewards: event.rewards
+        eventDate: event.date,
+        joinedCount: event.joinsCount,
+        eventImage: event.event_image || null
       }));
     }
 
     // Get user's event logs stats
-    const { EventLogs } = require('db');
     const eventLogs = await EventLogs.findAll({
       where: { userId },
       attributes: ['id', 'totalHours', 'checkOutTime', 'garbageWeight']
     });
 
     const totalHours = eventLogs.reduce((sum: number, log: any) => sum + (log.totalHours || 0), 0);
-    const completedEvents = eventLogs.filter((log: any) => log.checkOutTime).length;
+    const totalMinutesLogged = Math.floor(totalHours * 60);
     const totalGarbageCollected = eventLogs.reduce((sum: number, log: any) => sum + (log.garbageWeight || 0), 0);
+    
+    // Calculate CO2 collected (0.5 kg CO2 per kg waste)
+    const co2Collected = (totalGarbageCollected * 0.5).toFixed(2);
+    
+    // Calculate total points (5 points per 30 minutes)
+    const totalPoints = Math.floor((totalMinutesLogged / 30) * 5);
 
-    console.log(`✅ Dashboard data: ${eventsJoinedWithDetails.length} events, ${totalHours} hours`);
+    console.log(`✅ Dashboard data: ${eventsJoinedWithDetails.length} events, ${totalPoints} points`);
 
     res.status(200).json({
       message: 'Dashboard retrieved successfully',
@@ -790,10 +820,9 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
         role: user.role
       },
       stats: {
-        eventsJoined: eventsJoinedWithDetails.length,
-        completedEvents,
-        totalHours: totalHours.toFixed(2),
-        totalGarbageCollected: totalGarbageCollected.toFixed(2)
+        totalPoints,
+        co2Collected: parseFloat(co2Collected),
+        totalMinutesLogged
       },
       eventsJoined: eventsJoinedWithDetails
     });
@@ -801,5 +830,72 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
     console.log('❌ Error in getDashboardHandler:', error);
     reportError(error);
     res.status(500).json({ message: 'Error fetching dashboard', error });
+  }
+};
+
+// ✅ Get Event Leaderboard (User-based ranking for a specific event)
+export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const { eventId } = req.params;
+
+  try {
+    console.log(`🏆 [getEventLeaderboardHandler] Fetching leaderboard for eventId: ${eventId}`);
+
+    // Get event details
+    const event = await EventTable.findByPk(eventId, {
+      attributes: ['eventId', 'name', 'date', 'location']
+    });
+
+    if (!event) {
+      res.status(404).json({ message: EVENT_NOT_FOUND });
+      return;
+    }
+
+    // Get all event logs for this event, sorted by totalHours descending
+    const eventLogs = await EventLogs.findAll({
+      where: { eventId },
+      include: [
+        {
+          association: 'user',
+          attributes: ['id', 'name', 'email']
+        }
+      ],
+      attributes: ['id', 'userId', 'totalHours', 'garbageWeight', 'checkInTime', 'checkOutTime'],
+      order: [['totalHours', 'DESC']]
+    });
+
+    // Build leaderboard with rankings
+    const leaderboard = eventLogs.map((log: any, index: number) => ({
+      rank: index + 1,
+      userId: log.userId,
+      userName: log.user?.name || 'Unknown',
+      userEmail: log.user?.email || null,
+      totalHours: log.totalHours,
+      garbageWeightCollected: log.garbageWeight || 0,
+      checkInTime: log.checkInTime,
+      checkOutTime: log.checkOutTime,
+      eventName: event.name,
+      eventDate: event.date
+    }));
+
+    console.log(`✅ Event leaderboard has ${leaderboard.length} participants`);
+
+    res.status(200).json({
+      message: 'Event leaderboard retrieved successfully',
+      eventDetails: {
+        eventId: event.eventId,
+        eventName: event.name,
+        eventDate: event.date,
+        location: event.location,
+        totalParticipants: leaderboard.length
+      },
+      leaderboard
+    });
+  } catch (error) {
+    console.log('❌ Error in getEventLeaderboardHandler:', error);
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching event leaderboard', error });
   }
 };

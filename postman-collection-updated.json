@@ -1,0 +1,1073 @@
+{
+  "info": {
+    "name": "Event Management API (JWT Bearer Token)",
+    "description": "All endpoints use JWT Bearer Token authentication. User IDs are extracted from token, not from URL parameters.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:6060",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User (No Auth)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"password\": \"password123\",\n    \"role\": \"user\",\n    \"age\": 25,\n    \"gender\": \"male\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Profile (from token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/details",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "details"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Jane Doe\",\n    \"email\": \"jane@example.com\",\n    \"age\": 26,\n    \"gender\": \"female\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete My Account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Profile (alternative)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Users Profiles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users-profiles",
+              "host": ["{{baseUrl}}"],
+              "path": ["users-profiles"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/leaderboard/top",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "leaderboard", "top"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "Create Event (JSON)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"date\": \"2026-05-15\",\n    \"location\": \"Central Park\",\n    \"name\": \"Beach Cleanup\",\n    \"details\": \"Clean up the beach\",\n    \"description\": \"A community effort to clean the beach\",\n    \"rewards\": \"Free t-shirt\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Event (with Image)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "date",
+                  "value": "2026-05-15",
+                  "type": "text"
+                },
+                {
+                  "key": "location",
+                  "value": "Central Park",
+                  "type": "text"
+                },
+                {
+                  "key": "name",
+                  "value": "Beach Cleanup",
+                  "type": "text"
+                },
+                {
+                  "key": "details",
+                  "value": "Clean up the beach",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "A community effort to clean the beach",
+                  "type": "text"
+                },
+                {
+                  "key": "rewards",
+                  "value": "Free t-shirt",
+                  "type": "text"
+                },
+                {
+                  "key": "eventImage",
+                  "value": "",
+                  "type": "file",
+                  "src": "/path/to/event-cover-image.jpg"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Event",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Updated Beach Cleanup\",\n    \"location\": \"New Beach\",\n    \"rewards\": \"Free t-shirt and cap\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Event",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Events by Date",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/date/2026-05-15",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "date", "2026-05-15"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Upcoming Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/upcoming",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "upcoming"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Popular Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/popular",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "popular"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Join Event (with Image)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "eventImage",
+                  "value": "",
+                  "type": "file",
+                  "src": "/path/to/event-image.jpg"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events/1/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "1", "join"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/1/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "1", "leave"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Participants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/1/participants",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "1", "participants"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Joined Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/joined",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "joined"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Profile (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/events/1/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "1", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Events Profiles (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/events-profiles",
+              "host": ["{{baseUrl}}"],
+              "path": ["events-profiles"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dashboard (User Stats)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Global Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaderboard"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/1/leaderboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "1", "leaderboard"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Event Logs",
+      "item": [
+        {
+          "name": "Create Event Log (Check In) - JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"eventId\": 1,\n    \"groupId\": 5,\n    \"checkInTime\": \"2026-04-09T10:00:00Z\",\n    \"garbageWeight\": 2.5,\n    \"garbageType\": \"plastic\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/event-logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Event Log (Check In) - FormData with Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "eventId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "groupId",
+                  "value": "5",
+                  "type": "text"
+                },
+                {
+                  "key": "checkInTime",
+                  "value": "2026-04-09T10:00:00Z",
+                  "type": "text"
+                },
+                {
+                  "key": "garbageWeight",
+                  "value": "2.5",
+                  "type": "text"
+                },
+                {
+                  "key": "garbageType",
+                  "value": "plastic",
+                  "type": "text"
+                },
+                {
+                  "key": "wasteImage",
+                  "value": "",
+                  "type": "file",
+                  "src": "/path/to/image.jpg"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/event-logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Event Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/event-logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Log By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Event Log (Check Out) - JSON",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"checkOutTime\": \"2026-04-09T12:00:00Z\",\n    \"garbageWeight\": 3.0,\n    \"garbageType\": \"metal\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Event Log (Check Out) - FormData with Image",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "checkOutTime",
+                  "value": "2026-04-09T12:00:00Z",
+                  "type": "text"
+                },
+                {
+                  "key": "garbageWeight",
+                  "value": "3.0",
+                  "type": "text"
+                },
+                {
+                  "key": "garbageType",
+                  "value": "metal",
+                  "type": "text"
+                },
+                {
+                  "key": "wasteImage",
+                  "value": "",
+                  "type": "file",
+                  "src": "/path/to/new-image.jpg"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Event Log",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Event Logs (from token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/user",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "user"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Logs by Event",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/event/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "event", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Event Logs by Date (from token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/user/date/2026-04-09",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "user", "date", "2026-04-09"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Logs by Date Range",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"startDate\": \"2026-04-01\",\n    \"endDate\": \"2026-04-30\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/date-range",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "date-range"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Rewards Summary (from token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/event-logs/user/rewards",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs", "user", "rewards"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Groups",
+      "item": [
+        {
+          "name": "Create Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"groupName\": \"Green Warriors\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["groups"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["groups"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Group",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"groupName\": \"Green Warriors United\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Group",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["groups", "1", "users"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

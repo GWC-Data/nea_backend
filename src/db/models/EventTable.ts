@@ -74,6 +74,12 @@ export class EventTable extends Model {
   participants!: Array<{ userId: number; name: string; email: string; joinedAt: Date }>;
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true
+  })
+  event_image!: string;
+
+  @Column({
     type: DataType.DATE,
     allowNull: false,
     defaultValue: DataType.NOW

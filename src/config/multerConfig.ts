@@ -9,8 +9,9 @@ const uploadDir = path.join(process.cwd(), 'uploads');
 const tempDir = path.join(uploadDir, 'temp_chunks');
 const completedDir = path.join(uploadDir, 'completed_files');
 const wasteImageDir = path.join(uploadDir, 'waste_images');
+const eventImageDir = path.join(uploadDir, 'event_images');
 
-[uploadDir, tempDir, completedDir, wasteImageDir].forEach(dir => {
+[uploadDir, tempDir, completedDir, wasteImageDir, eventImageDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -46,6 +47,27 @@ const imageFileFilter = (_req: any, file: any, cb: FileFilterCallback): void => 
 // Multer instance for waste images
 export const wasteImageUpload = multer({
   storage: wasteImageStorage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+// Multer storage configuration for event images
+const eventImageStorage = multer.diskStorage({
+  destination: (_req: any, _file: any, cb: (error: Error | null, destination: string) => void) => {
+    cb(null, eventImageDir);
+  },
+  filename: (_req: any, file: any, cb: (error: Error | null, filename: string) => void) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `event-image-${uniqueSuffix}${ext}`);
+  }
+});
+
+// Multer instance for event images
+export const eventImageUpload = multer({
+  storage: eventImageStorage,
   fileFilter: imageFileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
