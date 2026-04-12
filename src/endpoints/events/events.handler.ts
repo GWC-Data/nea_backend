@@ -822,7 +822,8 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
       stats: {
         totalPoints,
         co2Collected: parseFloat(co2Collected),
-        totalMinutesLogged
+        totalMinutesLogged,
+        totalWeight: parseFloat(totalGarbageCollected.toFixed(2))
       },
       eventsJoined: eventsJoinedWithDetails
     });
