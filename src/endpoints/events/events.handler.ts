@@ -876,7 +876,7 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
       return;
     }
 
-    // Get all event logs for this event, sorted by totalHours descending
+    // Get all event logs for this event
     const eventLogs = await EventLogs.findAll({
       where: { eventId },
       include: [
@@ -885,23 +885,56 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
           attributes: ['id', 'name', 'email']
         }
       ],
-      attributes: ['id', 'userId', 'totalHours', 'garbageWeight', 'checkInTime', 'checkOutTime'],
-      order: [['totalHours', 'DESC']]
+      attributes: ['id', 'userId', 'totalHours', 'garbageWeight', 'checkInTime', 'checkOutTime']
     });
 
-    // Build leaderboard with rankings
-    const leaderboard = eventLogs.map((log: any, index: number) => ({
-      rank: index + 1,
-      userId: log.userId,
-      userName: log.user?.name || 'Unknown',
-      userEmail: log.user?.email || null,
-      totalHours: log.totalHours,
-      garbageWeightCollected: log.garbageWeight || 0,
-      checkInTime: log.checkInTime,
-      checkOutTime: log.checkOutTime,
-      eventName: event.name,
-      eventDate: event.date
-    }));
+    // Group by userId and aggregate stats
+    const userStatsMap = new Map<number, any>();
+
+    eventLogs.forEach((log: any) => {
+      const userId = log.userId;
+      if (!userStatsMap.has(userId)) {
+        userStatsMap.set(userId, {
+          userId: userId,
+          userName: log.user?.name || 'Unknown',
+          userEmail: log.user?.email || null,
+          totalHours: 0,
+          totalGarbageWeight: 0,
+          checkInTime: log.checkInTime,
+          checkOutTime: log.checkOutTime,
+          logsCount: 0
+        });
+      }
+
+      const stats = userStatsMap.get(userId);
+      stats.totalHours += log.totalHours || 0;
+      stats.totalGarbageWeight += log.garbageWeight || 0;
+      stats.logsCount += 1;
+      // Update to earliest check-in and latest check-out
+      if (log.checkInTime && (!stats.checkInTime || new Date(log.checkInTime) < new Date(stats.checkInTime))) {
+        stats.checkInTime = log.checkInTime;
+      }
+      if (log.checkOutTime && (!stats.checkOutTime || new Date(log.checkOutTime) > new Date(stats.checkOutTime))) {
+        stats.checkOutTime = log.checkOutTime;
+      }
+    });
+
+    // Convert map to array and sort by totalHours (descending)
+    const leaderboard = Array.from(userStatsMap.values())
+      .sort((a, b) => b.totalHours - a.totalHours)
+      .map((user, index) => ({
+        rank: index + 1,
+        userId: user.userId,
+        userName: user.userName,
+        userEmail: user.userEmail,
+        totalHours: user.totalHours,
+        garbageWeightCollected: parseFloat(user.totalGarbageWeight.toFixed(2)),
+        checkInTime: user.checkInTime,
+        checkOutTime: user.checkOutTime,
+        eventName: event.name,
+        eventDate: event.date,
+        logEntries: user.logsCount
+      }));
 
     console.log(`✅ Event leaderboard has ${leaderboard.length} participants`);
 
