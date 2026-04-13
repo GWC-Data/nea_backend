@@ -58,7 +58,7 @@ export const forgotPasswordHandler: EndpointHandler<EndpointAuthType.NONE> = asy
     reportInfo(`Reset token stored in DB. Attempting to send email to ${user.email}...`);
 
     // Send Email
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password/${resetToken}`;
 
     const mailOptions = {
