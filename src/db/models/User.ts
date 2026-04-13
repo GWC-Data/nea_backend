@@ -11,6 +11,7 @@ import {
 } from 'sequelize-typescript';
 import { GroupTable } from './GroupTable';
 import { EventLogs } from './EventLogs';
+import { PasswordReset } from './PasswordReset';
 
 @Table({
   tableName: 'Users',
@@ -86,6 +87,9 @@ export class User extends Model {
 
   @HasMany(() => EventLogs, { foreignKey: 'userId', as: 'eventLogs' })
   eventLogs!: EventLogs[];
+
+  @HasMany(() => PasswordReset, { foreignKey: 'userId', as: 'passwordResets' })
+  passwordResets!: PasswordReset[];
 
   @Column({
     type: DataType.DATE,

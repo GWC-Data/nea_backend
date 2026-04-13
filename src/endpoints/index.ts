@@ -4,4 +4,7 @@ export { orderedEventLogsEndpoints } from './event-logs';
 export * from './event-logs';
 export * from './events';
 export * from './groups';
+export * from './forgot-password';
+export * from './reset-password';
+export * from './mail';
 
