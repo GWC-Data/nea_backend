@@ -4,6 +4,9 @@ build/
 certs/
 migrate.js
 
+# ignore images
+uploads/
+
 # Local config
 config/bbm/config.js
 
