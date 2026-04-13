@@ -690,45 +690,67 @@ export const getAllEventsProfileHandler: EndpointHandler<EndpointAuthType.NONE> 
   }
 };
 
-// ✅ Get Leaderboard (Event-based)
+// ✅ Get Leaderboard (User-based ranking across all events)
 export const getLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   _req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
   try {
-    console.log('🏆 [getLeaderboardHandler] Fetching leaderboard');
+    console.log('🏆 [getLeaderboardHandler] Fetching user-based leaderboard');
 
-    // Get all events with their participant counts
-    const events = await EventTable.findAll({
+    // Get all event logs with user details
+    const eventLogs = await EventLogs.findAll({
       include: [
         {
-          association: 'eventLogs',
-          attributes: ['id', 'userId', 'totalHours']
+          association: 'user',
+          attributes: ['id', 'name', 'email']
         }
       ],
-      order: [['joinsCount', 'DESC']]
+      attributes: ['userId', 'totalHours', 'garbageWeight', 'eventId']
     });
 
-    // Build leaderboard: rank events by participation
-    const leaderboard = events
-      .filter(event => (event.eventLogs?.length || 0) > 0)
-      .map((event, index) => ({
+    // Group by userId and aggregate stats
+    const userStatsMap = new Map<number, any>();
+
+    eventLogs.forEach((log: any) => {
+      const userId = log.userId;
+      if (!userStatsMap.has(userId)) {
+        userStatsMap.set(userId, {
+          userId: userId,
+          userName: log.user?.name || 'Unknown',
+          userEmail: log.user?.email || null,
+          totalHours: 0,
+          totalGarbageWeight: 0,
+          eventsParticipated: 0
+        });
+      }
+
+      const stats = userStatsMap.get(userId);
+      stats.totalHours += log.totalHours || 0;
+      stats.totalGarbageWeight += log.garbageWeight || 0;
+      stats.eventsParticipated += 1;
+    });
+
+    // Convert map to array and sort by totalHours (descending)
+    const leaderboard = Array.from(userStatsMap.values())
+      .sort((a, b) => b.totalHours - a.totalHours)
+      .map((user, index) => ({
         rank: index + 1,
-        eventId: event.eventId,
-        eventName: event.name,
-        location: event.location,
-        date: event.date,
-        description: event.description,
-        rewards: event.rewards,
-        totalParticipants: event.joinsCount,
-        totalHours: (event.eventLogs || []).reduce((sum, log) => sum + (log.totalHours || 0), 0),
-        participantIds: (event.eventLogs || []).map(log => log.userId)
+        userId: user.userId,
+        userName: user.userName,
+        userEmail: user.userEmail,
+        totalHours: user.totalHours,
+        totalGarbageWeight: parseFloat(user.totalGarbageWeight.toFixed(2)),
+        eventsParticipated: user.eventsParticipated,
+        co2Offset: parseFloat((user.totalGarbageWeight * 0.5).toFixed(2)),
+        points: Math.floor((user.totalHours * 60 / 30) * 5)
       }));
 
-    console.log(`✅ Leaderboard has ${leaderboard.length} events`);
+    console.log(`✅ Leaderboard has ${leaderboard.length} users`);
 
     res.status(200).json({
-      message: 'Leaderboard retrieved successfully',
+      message: 'User leaderboard retrieved successfully',
+      totalUsers: leaderboard.length,
       leaderboard
     });
   } catch (error) {
