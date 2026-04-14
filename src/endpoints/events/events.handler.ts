@@ -18,6 +18,30 @@ import {
 import { Op } from 'sequelize';
 import { getRelativeImagePath} from 'config/multerConfig';
 
+// ✅ Helper function to check if string is UUID format
+const isUUID = (str: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
+// ✅ Helper to resolve event by UUID or numeric ID
+const getEventByUuidOrId = async (identifier: string) => {
+  if (isUUID(identifier)) {
+    return await EventTable.findOne({ where: { eventUuid: identifier } });
+  } else {
+    return await EventTable.findByPk(identifier);
+  }
+};
+
+// ✅ Helper to resolve user by UUID or numeric ID
+// const getUserByUuidOrId = async (identifier: string | number) => {
+//   if (typeof identifier === 'string' && isUUID(identifier)) {
+//     return await User.findOne({ where: { userUuid: identifier } });
+//   } else {
+//     return await User.findByPk(identifier);
+//   }
+// };
+
 // Helper function to get user ID from request
 const getUserIdFromRequest = (req: any): number | undefined => {
   // node-server-engine attaches decoded JWT to req.decoded or req.user
@@ -101,6 +125,7 @@ export const getAllEventsHandler: EndpointHandler<EndpointAuthType.JWT> = async 
 };
 
 // ✅ Get Event By ID
+// ✅ Get Event By ID or UUID
 export const getEventByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -108,7 +133,7 @@ export const getEventByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async 
   const { id } = req.params;
 
   try {
-    const event = await EventTable.findByPk(id);
+    const event = await getEventByUuidOrId(id);
 
     if (!event) {
       res.status(404).json({ message: EVENT_NOT_FOUND });
@@ -122,8 +147,9 @@ export const getEventByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async 
 
     res.status(200).json({ 
       event,
+      eventUuid: event.eventUuid,
       participantsCount: event.joinsCount,
-      participantsList: participants
+      participantUuids: participants
     });
   } catch (error) {
     reportError(error);
@@ -131,7 +157,7 @@ export const getEventByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async 
   }
 };
 
-// ✅ Update Event
+// ✅ Update Event By ID or UUID
 export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -146,7 +172,7 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    const event = await EventTable.findByPk(id);
+    const event = await getEventByUuidOrId(id);
 
     if (!event) {
       res.status(404).json({ message: EVENT_NOT_FOUND });
@@ -175,14 +201,18 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 
     await event.update(updateData);
 
-    res.status(200).json({ message: 'Event updated successfully', event });
+    res.status(200).json({ 
+      message: 'Event updated successfully', 
+      event,
+      eventUuid: event.eventUuid 
+    });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_UPDATE_ERROR, error });
   }
 };
 
-// ✅ Delete Event
+// ✅ Delete Event By ID or UUID
 export const deleteEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -196,7 +226,7 @@ export const deleteEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    const event = await EventTable.findByPk(id);
+    const event = await getEventByUuidOrId(id);
 
     if (!event) {
       res.status(404).json({ message: EVENT_NOT_FOUND });
@@ -205,7 +235,10 @@ export const deleteEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 
     await event.destroy();
 
-    res.status(200).json({ message: 'Event deleted successfully' });
+    res.status(200).json({ 
+      message: 'Event deleted successfully',
+      eventUuid: event.eventUuid 
+    });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_DELETION_ERROR, error });
@@ -296,7 +329,7 @@ export const getPopularEventsHandler: EndpointHandler<EndpointAuthType.JWT> = as
   }
 };
 
-// ✅ Join Event
+// ✅ Join Event (UUID or ID-based)
 export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -310,48 +343,28 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   }
 
   try {
-    const sequelize = EventTable.sequelize;
-
-    // Get user details
-    const users = await sequelize!.query(
-      `SELECT id, name, email FROM Users WHERE id = :userId`,
-      { replacements: { userId: userId }, type: 'SELECT' }
-    ) as any;
-    
-    const user = users[0];
+    // Get user details and UUID
+    const user = await User.findByPk(userId);
     if (!user) {
       res.status(404).json({ message: 'User not found' });
       return;
     }
 
-    // Get event info
-    const events = await sequelize!.query(
-      `SELECT eventId, name FROM EventTable WHERE eventId = :eventId`,
-      { replacements: { eventId: eventId }, type: 'SELECT' }
-    ) as any;
-    
-    const event = events[0];
+    // Get event details and UUID (supports both UUID and numeric ID)
+    const event = await getEventByUuidOrId(eventId);
     if (!event) {
       res.status(404).json({ message: 'Event not found' });
       return;
     }
 
-    // Get current participants
-    const [currentData] = await sequelize!.query(
-      `SELECT COALESCE(participants, '[]') as participants FROM EventTable WHERE eventId = :eventId`,
-      { replacements: { eventId: eventId }, type: 'SELECT' }
-    ) as any;
-
-    let participantsArray: any[] = [];
-    if (currentData?.participants) {
-      participantsArray = typeof currentData.participants === 'string' 
-        ? JSON.parse(currentData.participants) 
-        : currentData.participants;
+    // Get current participants (array of user UUIDs)
+    let participants: string[] = event.participants || [];
+    if (typeof participants === 'string') {
+      participants = JSON.parse(participants);
     }
 
-    // Check if user already joined
-    const alreadyJoined = participantsArray.some((p: any) => p.userId === userId);
-    if (alreadyJoined) {
+    // Check if user already joined (by UUID)
+    if (participants.includes(user.userUuid)) {
       res.status(400).json({ 
         message: 'You have already joined this event.',
         success: false
@@ -366,88 +379,40 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       console.log('📸 Event image uploaded:', eventImagePath);
     }
 
-    // Add user object to participants array
-    const participantObject = {
-      userId: user.id,
-      name: user.name,
-      email: user.email,
-      joinedAt: new Date()
-    };
-    
-    const updatedParticipants = [...participantsArray, participantObject];
-    const participantsJSON = JSON.stringify(updatedParticipants);
+    // Add user UUID to participants array
+    const updatedParticipants = [...participants, user.userUuid];
 
-    // Update EventTable with image if provided
-    const updateQuery = eventImagePath
-      ? `UPDATE EventTable SET participants = :participants, joinsCount = :joinsCount, event_image = :event_image WHERE eventId = :eventId`
-      : `UPDATE EventTable SET participants = :participants, joinsCount = :joinsCount WHERE eventId = :eventId`;
-    
-    const replacements: any = {
-      participants: participantsJSON,
-      joinsCount: updatedParticipants.length,
-      eventId: eventId
+    // Update EventTable
+    const updateData: any = {
+      participants: updatedParticipants,
+      joinsCount: updatedParticipants.length
     };
-    
     if (eventImagePath) {
-      replacements.event_image = eventImagePath;
+      updateData.event_image = eventImagePath;
     }
-
-    await sequelize!.query(updateQuery, { replacements });
+    await event.update(updateData);
 
     // Update user's joined events
-    const [userData] = await sequelize!.query(
-      `SELECT COALESCE(joinedEvents, '[]') as joinedEvents FROM Users WHERE id = :userId`,
-      { replacements: { userId: userId }, type: 'SELECT' }
-    ) as any;
-
-    let joinedEventsArray: any[] = [];
-    if (userData?.joinedEvents) {
-      joinedEventsArray = typeof userData.joinedEvents === 'string'
-        ? JSON.parse(userData.joinedEvents)
-        : userData.joinedEvents;
+    let joinedEvents: string[] = user.joinedEvents || [];
+    if (typeof joinedEvents === 'string') {
+      joinedEvents = JSON.parse(joinedEvents);
     }
 
-    // Check if event already in user's joined events
-    const eventAlreadyJoined = joinedEventsArray.some((e: any) => e.eventId === event.eventId);
-    if (!eventAlreadyJoined) {
-      const eventObject = {
-        eventId: event.eventId,
-        eventName: event.name,
-        joinedAt: new Date()
-      };
-      const updatedJoinedEvents = [...joinedEventsArray, eventObject];
-      const joinedEventsJSON = JSON.stringify(updatedJoinedEvents);
-
-      await sequelize!.query(
-        `UPDATE Users SET joinedEvents = :joinedEvents WHERE id = :userId`,
-        {
-          replacements: {
-            joinedEvents: joinedEventsJSON,
-            userId: userId
-          }
-        }
-      );
-    }
-
-    // Get updated event data
-    const [updatedEvent] = await sequelize!.query(
-      `SELECT eventId, name, joinsCount, participants FROM EventTable WHERE eventId = :eventId`,
-      { replacements: { eventId: eventId }, type: 'SELECT' }
-    ) as any;
-
-    let parsedParticipants = updatedEvent.participants;
-    if (typeof parsedParticipants === 'string') {
-      parsedParticipants = JSON.parse(parsedParticipants);
+    // Check if event UUID already in user's joined events
+    if (!joinedEvents.includes(event.eventUuid)) {
+      const updatedJoinedEvents = [...joinedEvents, event.eventUuid];
+      await user.update({ joinedEvents: updatedJoinedEvents });
     }
 
     res.status(200).json({
       message: `Successfully joined the event: ${event.name}`,
       success: true,
       data: {
-        eventId: updatedEvent.eventId,
-        eventName: updatedEvent.name,
-        totalParticipants: updatedEvent.joinsCount,
-        participants: parsedParticipants
+        eventId: event.eventId,
+        eventUuid: event.eventUuid,
+        eventName: event.name,
+        totalParticipants: updatedParticipants.length,
+        participantUuids: updatedParticipants
       }
     });
   } catch (error) {
@@ -457,7 +422,7 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   }
 };
 
-// ✅ Leave Event
+// ✅ Leave Event (UUID or ID-based)
 export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -471,8 +436,8 @@ export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   }
 
   try {
-    // Check if event exists
-    const event = await EventTable.findByPk(eventId);
+    // Check if event exists (supports both UUID and numeric ID)
+    const event = await getEventByUuidOrId(eventId);
     if (!event) {
       res.status(404).json({ message: 'Event not found' });
       return;
@@ -485,45 +450,45 @@ export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    // Get current participants (array of objects)
-    let participants = event.participants || [];
+    // Get current participants (array of user UUIDs)
+    let participants: string[] = event.participants || [];
     if (typeof participants === 'string') {
       participants = JSON.parse(participants);
     }
 
-    // Check if user is in participants (checking userId property)
-    const wasJoined = participants.some((p: any) => p.userId === userId);
-    if (!wasJoined) {
+    // Check if user UUID is in participants
+    if (!participants.includes(user.userUuid)) {
       res.status(400).json({ message: 'User has not joined this event' });
       return;
     }
 
-    // Remove user from participants (filter by userId property)
-    participants = participants.filter((p: any) => p.userId !== userId);
+    // Remove user UUID from participants
+    const updatedParticipants = participants.filter(uuid => uuid !== user.userUuid);
 
     // Update event
     await event.update({
-      participants: participants,
-      joinsCount: participants.length
+      participants: updatedParticipants,
+      joinsCount: updatedParticipants.length
     });
 
-    // Update user's joinedEvents (array of objects)
-    let joinedEvents = user.joinedEvents || [];
+    // Update user's joinedEvents (array of event UUIDs)
+    let joinedEvents: string[] = user.joinedEvents || [];
     if (typeof joinedEvents === 'string') {
       joinedEvents = JSON.parse(joinedEvents);
     }
 
-    // Remove event from user's joined events
-    joinedEvents = joinedEvents.filter((e: any) => e.eventId !== parseInt(eventId));
-    await user.update({ joinedEvents: joinedEvents });
+    // Remove event UUID from user's joined events
+    const updatedJoinedEvents = joinedEvents.filter(uuid => uuid !== event.eventUuid);
+    await user.update({ joinedEvents: updatedJoinedEvents });
 
     res.status(200).json({
       message: 'Successfully left the event',
       event: {
         eventId: event.eventId,
+        eventUuid: event.eventUuid,
         name: event.name,
-        joinsCount: participants.length,
-        participants: participants
+        joinsCount: updatedParticipants.length,
+        participantUuids: updatedParticipants
       }
     });
   } catch (error) {
@@ -532,7 +497,7 @@ export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   }
 };
 
-// ✅ Get Event Participants
+// ✅ Get Event Participants (UUID or ID-based)
 export const getEventParticipantsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -540,22 +505,36 @@ export const getEventParticipantsHandler: EndpointHandler<EndpointAuthType.JWT> 
   const { eventId } = req.params;
 
   try {
-    const event = await EventTable.findByPk(eventId);
+    const event = await getEventByUuidOrId(eventId);
     if (!event) {
       res.status(404).json({ message: EVENT_NOT_FOUND });
       return;
     }
 
-    let participants = event.participants;
-    if (typeof participants === 'string') {
-      participants = JSON.parse(participants);
+    // Get participant details from UUIDs
+    let participantUuids: string[] = event.participants || [];
+    if (typeof participantUuids === 'string') {
+      participantUuids = JSON.parse(participantUuids);
     }
+
+    // Fetch user details for each UUID
+    const participants = await User.findAll({
+      where: { userUuid: participantUuids },
+      attributes: ['id', 'userUuid', 'name', 'email']
+    });
 
     res.status(200).json({ 
       eventId: event.eventId,
+      eventUuid: event.eventUuid,
       eventName: event.name,
       joinsCount: event.joinsCount,
-      participants: participants
+      participantUuids: participantUuids,
+      participants: participants.map(p => ({
+        userId: p.id,
+        userUuid: p.userUuid,
+        name: p.name,
+        email: p.email
+      }))
     });
   } catch (error) {
     reportError(error);
@@ -563,7 +542,7 @@ export const getEventParticipantsHandler: EndpointHandler<EndpointAuthType.JWT> 
   }
 };
 
-// ✅ Get User Joined Events (extract userId from token)
+// ✅ Get User Joined Events (extract userId from token, UUID-based)
 export const getUserJoinedEventsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -577,7 +556,7 @@ export const getUserJoinedEventsHandler: EndpointHandler<EndpointAuthType.JWT> =
 
   try {
     const user = await User.findByPk(userId, {
-      attributes: ['id', 'name', 'email', 'joinedEvents']
+      attributes: ['id', 'userUuid', 'name', 'email', 'joinedEvents']
     });
     
     if (!user) {
@@ -585,15 +564,38 @@ export const getUserJoinedEventsHandler: EndpointHandler<EndpointAuthType.JWT> =
       return;
     }
 
-    let joinedEvents = user.joinedEvents;
-    if (typeof joinedEvents === 'string') {
-      joinedEvents = JSON.parse(joinedEvents);
+    // Get event UUIDs
+    let eventUuids: string[] = user.joinedEvents || [];
+    if (typeof eventUuids === 'string') {
+      eventUuids = JSON.parse(eventUuids);
+    }
+
+    // Fetch event details for each UUID
+    let joinedEventsWithDetails: any[] = [];
+    if (eventUuids.length > 0) {
+      const events = await EventTable.findAll({
+        where: { eventUuid: eventUuids },
+        attributes: ['eventId', 'eventUuid', 'name', 'location', 'date', 'joinsCount']
+      });
+
+      joinedEventsWithDetails = events.map(event => ({
+        eventId: event.eventId,
+        eventUuid: event.eventUuid,
+        eventName: event.name,
+        location: event.location,
+        eventDate: event.date,
+        participantsCount: event.joinsCount
+      }));
     }
 
     res.status(200).json({ 
       userId: user.id,
+      userUuid: user.userUuid,
       userName: user.name,
-      joinedEvents: joinedEvents
+      userEmail: user.email,
+      totalEventsJoined: eventUuids.length,
+      joinedEventUuids: eventUuids,
+      joinedEvents: joinedEventsWithDetails
     });
   } catch (error) {
     reportError(error);
@@ -602,6 +604,7 @@ export const getUserJoinedEventsHandler: EndpointHandler<EndpointAuthType.JWT> =
 };
 
 // ✅ Get Event Profile
+// ✅ Get Event Profile (UUID or ID-based, No Auth)
 export const getEventProfileHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req: any,
   res: Response
@@ -609,14 +612,25 @@ export const getEventProfileHandler: EndpointHandler<EndpointAuthType.NONE> = as
   const { eventId } = req.params;
 
   try {
-    const event = await EventTable.findByPk(eventId, {
-      include: [
-        {
-          association: 'eventLogs',
-          attributes: ['id', 'userId', 'checkInTime', 'checkOutTime', 'totalHours']
-        }
-      ]
-    });
+    const event = await (isUUID(eventId) 
+      ? EventTable.findOne({ 
+          where: { eventUuid: eventId },
+          include: [
+            {
+              association: 'eventLogs',
+              attributes: ['id', 'userId', 'checkInTime', 'checkOutTime', 'totalHours']
+            }
+          ]
+        })
+      : EventTable.findByPk(eventId, {
+          include: [
+            {
+              association: 'eventLogs',
+              attributes: ['id', 'userId', 'checkInTime', 'checkOutTime', 'totalHours']
+            }
+          ]
+        })
+    );
 
     if (!event) {
       res.status(404).json({ message: 'Event not found' });
@@ -629,6 +643,7 @@ export const getEventProfileHandler: EndpointHandler<EndpointAuthType.NONE> = as
     // Prepare event profile response
     const eventProfile = {
       eventId: event.eventId,
+      eventUuid: event.eventUuid,
       eventName: event.name,
       location: event.location,
       joinedCount: joinedCount,
@@ -777,7 +792,7 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
 
     // Get user details
     const user = await User.findByPk(userId, {
-      attributes: ['id', 'name', 'email', 'role', 'joinedEvents']
+      attributes: ['id', 'userUuid', 'name', 'email', 'role', 'joinedEvents']
     });
 
     if (!user) {
@@ -785,28 +800,27 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
       return;
     }
 
-    // Parse joinedEvents array
-    let joinedEventsList = user.joinedEvents;
-    if (typeof joinedEventsList === 'string') {
-      joinedEventsList = JSON.parse(joinedEventsList);
+    // Parse joinedEvents array (array of event UUIDs)
+    let eventUuids: string[] = user.joinedEvents || [];
+    if (typeof eventUuids === 'string') {
+      eventUuids = JSON.parse(eventUuids);
     }
 
-    // Get full event details for each joined event
-    const eventIds = (joinedEventsList || []).map((e: any) => e.eventId || e);
-    
+    // Get full event details for each joined event UUID
     let eventsJoinedWithDetails: any[] = [];
-    if (eventIds.length > 0) {
+    if (eventUuids.length > 0) {
       const fullEvents = await EventTable.findAll({
         where: {
-          eventId: {
-            [Op.in]: eventIds
+          eventUuid: {
+            [Op.in]: eventUuids
           }
         },
-        attributes: ['eventId', 'name', 'location', 'date', 'joinsCount', 'event_image']
+        attributes: ['eventId', 'eventUuid', 'name', 'location', 'date', 'joinsCount', 'event_image']
       });
 
       eventsJoinedWithDetails = fullEvents.map(event => ({
         eventId: event.eventId,
+        eventUuid: event.eventUuid,
         eventName: event.name,
         location: event.location,
         eventDate: event.date,
@@ -837,6 +851,7 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
       message: 'Dashboard retrieved successfully',
       profile: {
         userId: user.id,
+        userUuid: user.userUuid,
         name: user.name,
         email: user.email,
         role: user.role
@@ -857,6 +872,7 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
 };
 
 // ✅ Get Event Leaderboard (User-based ranking for a specific event)
+// ✅ Get Event Leaderboard (User-based ranking for a specific event, UUID or ID-based)
 export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -867,9 +883,15 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
     console.log(`🏆 [getEventLeaderboardHandler] Fetching leaderboard for eventId: ${eventId}`);
 
     // Get event details
-    const event = await EventTable.findByPk(eventId, {
-      attributes: ['eventId', 'name', 'date', 'location']
-    });
+    const event = await (isUUID(eventId)
+      ? EventTable.findOne({
+          where: { eventUuid: eventId },
+          attributes: ['eventId', 'eventUuid', 'name', 'date', 'location']
+        })
+      : EventTable.findByPk(eventId, {
+          attributes: ['eventId', 'eventUuid', 'name', 'date', 'location']
+        })
+    );
 
     if (!event) {
       res.status(404).json({ message: EVENT_NOT_FOUND });
@@ -878,11 +900,11 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
 
     // Get all event logs for this event
     const eventLogs = await EventLogs.findAll({
-      where: { eventId },
+      where: { eventId: event.eventId },
       include: [
         {
           association: 'user',
-          attributes: ['id', 'name', 'email']
+          attributes: ['id', 'userUuid', 'name', 'email']
         }
       ],
       attributes: ['id', 'userId', 'totalHours', 'garbageWeight', 'checkInTime', 'checkOutTime']
@@ -896,6 +918,7 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
       if (!userStatsMap.has(userId)) {
         userStatsMap.set(userId, {
           userId: userId,
+          userUuid: log.user?.userUuid || null,
           userName: log.user?.name || 'Unknown',
           userEmail: log.user?.email || null,
           totalHours: 0,
@@ -925,6 +948,7 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
       .map((user, index) => ({
         rank: index + 1,
         userId: user.userId,
+        userUuid: user.userUuid,
         userName: user.userName,
         userEmail: user.userEmail,
         totalHours: user.totalHours,
@@ -942,6 +966,7 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
       message: 'Event leaderboard retrieved successfully',
       eventDetails: {
         eventId: event.eventId,
+        eventUuid: event.eventUuid,
         eventName: event.name,
         eventDate: event.date,
         location: event.location,

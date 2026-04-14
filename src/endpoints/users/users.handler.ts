@@ -63,7 +63,16 @@ export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
     const userResponse = newUser.toJSON();
     delete userResponse.password;
 
-    res.status(201).json({ message: 'User created successfully', user: userResponse });
+    res.status(201).json({ 
+      message: 'User created successfully', 
+      user: {
+        id: userResponse.id,
+        userUuid: userResponse.userUuid,
+        name: userResponse.name,
+        email: userResponse.email,
+        role: userResponse.role
+      }
+    });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_CREATION_ERROR, error });
@@ -84,7 +93,20 @@ export const getAllUsersHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       order: [['createdAt', 'DESC']]
     });
 
-    res.status(200).json({ users });
+    // Map users to include userUuid
+    const usersResponse = users.map(u => ({
+      id: u.id,
+      userUuid: u.userUuid,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      age: u.age,
+      gender: u.gender,
+      group: u.group,
+      createdAt: u.createdAt
+    }));
+
+    res.status(200).json({ users: usersResponse });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_GET_ERROR, error });
@@ -117,7 +139,20 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    res.status(200).json({ user });
+    const userResponse = {
+      id: user.id,
+      userUuid: user.userUuid,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      age: user.age,
+      gender: user.gender,
+      group: user.group,
+      joinedEvents: user.joinedEvents,
+      createdAt: user.createdAt
+    };
+
+    res.status(200).json({ user: userResponse });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_GET_ERROR });
@@ -170,7 +205,23 @@ export const updateUserHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       attributes: { exclude: ['password'] }
     });
 
-    res.status(200).json({ message: 'User updated successfully', user: updatedUser });
+    if (!updatedUser) {
+      res.status(404).json({ message: USER_NOT_FOUND });
+      return;
+    }
+
+    const userResponse = {
+      id: updatedUser.id,
+      userUuid: updatedUser.userUuid,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      age: updatedUser.age,
+      gender: updatedUser.gender,
+      joinedEvents: updatedUser.joinedEvents
+    };
+
+    res.status(200).json({ message: 'User updated successfully', user: userResponse });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: USER_UPDATE_ERROR, error });

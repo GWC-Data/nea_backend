@@ -1,0 +1,618 @@
+{
+  "info": {
+    "name": "NEA Event Management API - Complete with UUID",
+    "description": "Complete API collection with Authentication, User Management, and Event Management endpoints. All endpoints use UUID-based identifiers with backward compatibility for numeric IDs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:6060",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string",
+      "description": "JWT Bearer token from login endpoint"
+    },
+    {
+      "key": "userUuid",
+      "value": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "string",
+      "description": "UUID of a user (for testing)"
+    },
+    {
+      "key": "eventUuid",
+      "value": "550e8400-e29b-41d4-a716-446655440001",
+      "type": "string",
+      "description": "UUID of an event (for testing)"
+    },
+    {
+      "key": "userId",
+      "value": "1",
+      "type": "string",
+      "description": "Numeric user ID (backward compatibility)"
+    },
+    {
+      "key": "eventId",
+      "value": "1",
+      "type": "string",
+      "description": "Numeric event ID (backward compatibility)"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login endpoint - returns JWT token and user info with userUuid"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"user\",\n  \"age\": 30,\n  \"gender\": \"male\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "description": "Create a new user - returns user with userUuid"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "description": "Get all users with their UUIDs - requires JWT authentication"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Profile (Current User)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/details",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "details"]
+            },
+            "description": "Get current user's profile details with joinedEvents array (event UUIDs)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Profile Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "profile"]
+            },
+            "description": "Get user profile with statistics (waste collected, time logged, points, badge, etc.)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Users Profiles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users-profiles",
+              "host": ["{{baseUrl}}"],
+              "path": ["users-profiles"]
+            },
+            "description": "Get all users with their profile statistics"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/leaderboard/top",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "leaderboard", "top"]
+            },
+            "description": "Get top users leaderboard with ranking"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe Updated\",\n  \"age\": 31,\n  \"gender\": \"male\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "description": "Update current user's profile - requires JWT authentication"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "description": "Delete current user account - requires JWT authentication"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "Create Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-04-25T10:00:00Z\",\n  \"location\": \"Central Park\",\n  \"name\": \"Park Cleanup Drive\",\n  \"details\": \"Clean up the park\",\n  \"description\": \"Join us for a community cleanup event\",\n  \"rewards\": \"Certificates and refreshments\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
+            },
+            "description": "Create a new event - returns event with eventUuid"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event by UUID or ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}"]
+            },
+            "description": "Get event details by UUID or numeric ID - supports both format types"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Event",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Park Cleanup\",\n  \"location\": \"Central Park Updated\",\n  \"date\": \"2026-04-26T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}"]
+            },
+            "description": "Update event details - accepts both UUID and numeric ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Event",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}"]
+            },
+            "description": "Delete an event - accepts both UUID and numeric ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Participants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/participants",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "participants"]
+            },
+            "description": "Get list of participants in an event with their userUuid"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "profile"]
+            },
+            "description": "Get extended event profile with statistics and participant details"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/leaderboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "leaderboard"]
+            },
+            "description": "Get leaderboard for top participants in event by waste collected"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Event Participation",
+      "item": [
+        {
+          "name": "Join Event (UUID or ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "join"]
+            },
+            "description": "Join an event - stores user UUID in event.participants array"
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Event (UUID or ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "leave"]
+            },
+            "description": "Leave an event - removes user UUID from event.participants array"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User's Joined Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/events/joined",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "events", "joined"]
+            },
+            "description": "Get all events joined by current user - returns event details from UUID array"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Event Logs",
+      "item": [
+        {
+          "name": "Create Event Log",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"{{eventUuid}}\",\n  \"checkInTime\": \"2026-04-25T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/event-logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs"]
+            },
+            "description": "Create event log/check-in entry"
+          },
+          "response": []
+        },
+        {
+          "name": "Checkout Event Log",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": \"{{eventUuid}}\",\n  \"checkOutTime\": \"2026-04-25T14:00:00Z\",\n  \"totalHours\": 4,\n  \"garbageWeight\": 25.5,\n  \"wasteImage\": \"base64encodedimage\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/event-logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["event-logs"]
+            },
+            "description": "Check out from event and record waste collection data"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Groups",
+      "item": [
+        {
+          "name": "Create Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupName\": \"Community Activists\",\n  \"description\": \"A group dedicated to community cleanup\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["groups"]
+            },
+            "description": "Create a new group"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["groups"]
+            },
+            "description": "Get all groups"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Password Management",
+      "item": [
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["forgot-password"]
+            },
+            "description": "Request password reset - sends email with reset token"
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"reset-token-from-email\",\n  \"newPassword\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["reset-password"]
+            },
+            "description": "Reset password using token from email"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

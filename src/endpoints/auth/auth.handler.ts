@@ -53,7 +53,13 @@ export const loginHandler: EndpointHandler<EndpointAuthType> = async (
     res.status(200).json({
       accessToken,
       tokenExpiry,
-      user: userPayload
+      user: {
+        id: user.id,
+        userUuid: user.userUuid,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
 
   } catch (error) {

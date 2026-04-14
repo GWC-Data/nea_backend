@@ -1,0 +1,378 @@
+{
+  "info": {
+    "name": "NEA Event Management API - UUID Based",
+    "description": "All endpoints use JWT Bearer Token authentication. User IDs and Event IDs are extracted from UUIDs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:6060",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userUuid",
+      "value": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "string"
+    },
+    {
+      "key": "eventUuid",
+      "value": "550e8400-e29b-41d4-a716-446655440001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "Create Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-04-25T10:00:00Z\",\n  \"location\": \"Central Park\",\n  \"name\": \"Park Cleanup Drive\",\n  \"details\": \"Clean up the park\",\n  \"description\": \"Join us for a community cleanup event\",\n  \"rewards\": \"Certificates and refreshments\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event By UUID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Event By UUID",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Park Cleanup\",\n  \"location\": \"Central Park - Updated\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Event By UUID",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Events By Date",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/date/2026-04-20",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "date", "2026-04-20"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Upcoming Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/upcoming",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "upcoming"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Popular Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/popular?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "popular"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Event Participation",
+      "item": [
+        {
+          "name": "Join Event By UUID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "join"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Event By UUID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "leave"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Participants By UUID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/participants",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "participants"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Joined Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/joined",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "joined"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Event Profiles",
+      "item": [
+        {
+          "name": "Get Event Profile By UUID (No Auth)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Events Profiles (No Auth)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/events-profiles",
+              "host": ["{{baseUrl}}"],
+              "path": ["events-profiles"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Leaderboards",
+      "item": [
+        {
+          "name": "Get Global Leaderboard (User-based)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leaderboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaderboard"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Event Leaderboard By UUID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventUuid}}/leaderboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "{{eventUuid}}", "leaderboard"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get User Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

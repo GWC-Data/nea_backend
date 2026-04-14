@@ -8,6 +8,7 @@ import {
   HasMany
 } from 'sequelize-typescript';
 import { EventLogs } from './EventLogs';
+import { v4 as uuidv4 } from 'uuid';
 
 @Table({
   tableName: 'EventTable',
@@ -22,6 +23,15 @@ export class EventTable extends Model {
     primaryKey: true
   })
   declare eventId: number;
+
+  @Column({
+    type: DataType.UUID,
+    allowNull: false,
+    unique: true,
+    defaultValue: () => uuidv4(),
+    comment: 'Event UUID for cross-system references'
+  })
+  eventUuid!: string;
 
   @Column({
     type: DataType.DATE,
@@ -69,9 +79,10 @@ export class EventTable extends Model {
   @Column({
     type: DataType.JSON,
     allowNull: true,
-    defaultValue: []
+    defaultValue: [],
+    comment: 'Array of User UUIDs that have joined this event'
   })
-  participants!: Array<{ userId: number; name: string; email: string; joinedAt: Date }>;
+  participants!: string[];
 
   @Column({
     type: DataType.STRING,

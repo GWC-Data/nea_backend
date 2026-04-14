@@ -12,6 +12,7 @@ import {
 import { GroupTable } from './GroupTable';
 import { EventLogs } from './EventLogs';
 import { PasswordReset } from './PasswordReset';
+import { v4 as uuidv4 } from 'uuid';
 
 @Table({
   tableName: 'Users',
@@ -26,6 +27,15 @@ export class User extends Model {
     primaryKey: true
   })
   declare id: number;
+
+  @Column({
+    type: DataType.UUID,
+    allowNull: false,
+    unique: true,
+    defaultValue: () => uuidv4(),
+    comment: 'User UUID for cross-system references'
+  })
+  userUuid!: string;
 
   @Column({
     type: DataType.STRING,
@@ -68,9 +78,10 @@ export class User extends Model {
   @Column({
     type: DataType.JSON,
     allowNull: true,
-    defaultValue: []
+    defaultValue: [],
+    comment: 'Array of Event UUIDs that this user has joined'
   })
-  joinedEvents!: Array<{ eventId: number; eventName: string; joinedAt: Date }>;
+  joinedEvents!: string[];
 
   @ForeignKey(() => GroupTable)
   @Column({
