@@ -12,10 +12,20 @@ import {
   getEventLogsByEventHandler,
   getUserEventLogsByDateHandler,
   getEventLogsByDateRangeHandler,
-  getUserRewardsSummaryHandler
+  getUserRewardsSummaryHandler,
+  getTimerHandler
 } from './event-logs.handler';
 
 // ✅ POST - Must be first to avoid conflicts
+// export const createEventLogEndpoint = new Endpoint({
+//   path: '/event-logs',
+//   method: EndpointMethod.POST,
+//   handler: createEventLogHandler,
+//   authType: EndpointAuthType.JWT,
+//   validator: {},
+//   middleware: [wasteImageUpload.single('wasteImage')]
+// });
+
 export const createEventLogEndpoint = new Endpoint({
   path: '/event-logs',
   method: EndpointMethod.POST,
@@ -23,6 +33,14 @@ export const createEventLogEndpoint = new Endpoint({
   authType: EndpointAuthType.JWT,
   validator: {},
   middleware: [wasteImageUpload.single('wasteImage')]
+});
+
+export const getTimerEndpoint = new Endpoint({
+  path: '/timer',
+  method: EndpointMethod.GET,
+  handler: getTimerHandler,
+  authType: EndpointAuthType.JWT,
+   validator: {}
 });
 
 // ✅ MORE SPECIFIC ROUTES BEFORE GENERIC ONES - Critical for routing!

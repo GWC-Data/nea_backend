@@ -14,7 +14,6 @@ import {
   AUTH_USER_NOT_FOUND
 } from './auth.const';
 
-
 export const loginHandler: EndpointHandler<EndpointAuthType> = async (
   req: EndpointRequestType[EndpointAuthType],
   res: Response
@@ -37,9 +36,7 @@ export const loginHandler: EndpointHandler<EndpointAuthType> = async (
       return;
     }
 
-    
-
-    // ✅ Simple user payload (flat structure for JWT, not wrapped in 'user' object)
+    // User payload for JWT (id is the UUID)
     const userPayload = {
       id: user.id,
       name: user.name,
@@ -54,8 +51,7 @@ export const loginHandler: EndpointHandler<EndpointAuthType> = async (
       accessToken,
       tokenExpiry,
       user: {
-        id: user.id,
-        userUuid: user.userUuid,
+        id: user.id,        // UUID primary key
         name: user.name,
         email: user.email,
         role: user.role

@@ -2,12 +2,10 @@
 
 import {
   EndpointAuthType,
-  // EndpointRequestType,
   EndpointHandler,
   reportError
 } from 'node-server-engine';
 import { Response } from 'express';
-// import { Request } from 'express';
 import { EventLogs, User } from 'db';
 import {
   EVENT_LOG_NOT_FOUND,
@@ -25,6 +23,22 @@ import {
 } from './event-logs.const';
 import { Op } from 'sequelize';
 import { deleteImageFile, getRelativeImagePath } from 'config/multerConfig';
+
+// Helper: convert "30min", "1hours", "1.5hours" to totalHours (float)
+function parseHoursEnrolled(value: string): number {
+  if (!value) return 0;
+  const str = value.trim().toLowerCase();
+  if (str.endsWith('min')) {
+    const mins = parseFloat(str);
+    return isNaN(mins) ? 0 : mins / 60;
+  }
+  if (str.endsWith('hours')) {
+    const hrs = parseFloat(str);
+    return isNaN(hrs) ? 0 : hrs;
+  }
+  const hrs = parseFloat(str);
+  return isNaN(hrs) ? 0 : hrs;
+}
 
 // Helper function to calculate rewards
 function calculateRewards(totalHours: number): { points: number; badge: string | null; message: string | null } {
@@ -48,31 +62,23 @@ function calculateRewards(totalHours: number): { points: number; badge: string |
   return { points, badge, message };
 }
 
-// Helper function to get user ID from request bearer token
-const getUserIdFromRequest = (req: any): number | undefined => {
-  // node-server-engine attaches decoded JWT to req.decoded or req.user
-  return (req as any).decoded?.id || (req as any).user?.id || (req as any).token?.id || (req as any).decodedToken?.id;
+// Helper function to get user ID from request bearer token (returns UUID string)
+const getUserIdFromRequest = (req: any): string | undefined => {
+  return req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id;
 };
 
-// Helper function to get user's total hours
-async function getUserTotalHours(userId: number): Promise<number> {
-  const eventLogs = await EventLogs.findAll({
-    where: {
-      userId,
-      checkOutTime: { [Op.ne]: null }
-    }
-  });
-  
-  const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
-  return totalHours;
+// Helper function to get user's total hours across all logs (accepts UUID string)
+async function getUserTotalHours(userId: string): Promise<number> {
+  const logs = await EventLogs.findAll({ where: { userId } });
+  return logs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
 }
 
-// ✅ Create Event Log (Check In)
+// ✅ Create Event Log (Check In) with hoursEnrolled
 export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: any,
   res: Response
 ): Promise<void> => {
-  const { eventId, groupId, checkInTime, garbageWeight, garbageType } = req.body;
+  const { eventId, groupId, checkInTime, garbageWeight, garbageType, hoursEnrolled } = req.body;
   const userId = getUserIdFromRequest(req);
 
   try {
@@ -80,6 +86,13 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       res.status(401).json({ message: 'User ID not found in token' });
       return;
     }
+
+    // Convert hoursEnrolled to totalHours (float)
+    let totalHours = 0;
+    if (hoursEnrolled) {
+      totalHours = parseHoursEnrolled(hoursEnrolled);
+    }
+
     // Check if groupId column exists in EventLogs table
     const attributes = Object.keys(EventLogs.getAttributes());
     const hasGroupIdColumn = attributes.includes('groupId');
@@ -98,19 +111,20 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       return;
     }
 
-    // Create data object based on existing columns
+    // Build data object with correct types
     const eventLogData: any = {
-      eventId,
-      userId,
+      eventId,                       // string (UUID)
+      userId,                        // string (UUID)
       checkInTime: checkInTime ? new Date(checkInTime) : new Date(),
       checkOutTime: null,
-      totalHours: 0,
-      garbageWeight: garbageWeight || 0,
+      totalHours,                    // number
+      hoursEnrolled: hoursEnrolled || null,  // store original string
+      garbageWeight: garbageWeight ? parseFloat(garbageWeight) : 0,
       garbageType: garbageType || null,
       wasteImage: null
     };
     
-    // Only add groupId if the column exists and is a valid value
+    // Only add groupId if column exists and is a valid number
     if (hasGroupIdColumn && groupId && groupId !== 'null' && groupId !== null) {
       const groupIdNum = parseInt(groupId, 10);
       if (!isNaN(groupIdNum)) {
@@ -145,6 +159,40 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
     }
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_CREATION_ERROR, error });
+  }
+};
+
+// ✅ GET /timer – returns active timer with hoursEnrolled
+export const getTimerHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: any,
+  res: Response
+): Promise<void> => {
+  const userId = getUserIdFromRequest(req);
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
+
+  try {
+    const activeLog = await EventLogs.findOne({
+      where: { userId, checkOutTime: null },
+      order: [['checkInTime', 'DESC']],
+    });
+
+    if (!activeLog) {
+      res.status(404).json({ message: 'No active timer found for this user' });
+      return;
+    }
+
+    res.status(200).json({
+      checkInTime: activeLog.checkInTime,
+      hoursEnrolled: activeLog.hoursEnrolled,
+      eventId: activeLog.eventId,
+      logId: activeLog.id,
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching active timer', error });
   }
 };
 
@@ -240,13 +288,12 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       const updateData: any = {
         checkOutTime: checkOutDate,
         totalHours: sessionHours,
-        garbageWeight: garbageWeight !== undefined ? garbageWeight : eventLog.garbageWeight,
+        garbageWeight: garbageWeight !== undefined ? parseFloat(garbageWeight) : eventLog.garbageWeight,
         garbageType: garbageType !== undefined ? garbageType : eventLog.garbageType
       };
 
       // Handle waste image upload
       if (req.file) {
-        // Delete old image if exists
         if (eventLog.wasteImage) {
           deleteImageFile(eventLog.wasteImage);
         }
@@ -286,13 +333,12 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
 
       res.status(200).json(responseData);
     } else {
+      // Partial update (no check-out)
       const updateData: any = {};
-      if (garbageWeight !== undefined) updateData.garbageWeight = garbageWeight;
+      if (garbageWeight !== undefined) updateData.garbageWeight = parseFloat(garbageWeight);
       if (garbageType !== undefined) updateData.garbageType = garbageType;
 
-      // Handle waste image upload
       if (req.file) {
-        // Delete old image if exists
         if (eventLog.wasteImage) {
           deleteImageFile(eventLog.wasteImage);
         }
@@ -312,7 +358,6 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       res.status(200).json({ message: 'Event log updated successfully', eventLog: updatedEventLog });
     }
   } catch (error) {
-    // Delete uploaded file if there's an error
     if (req.file) {
       deleteImageFile(req.file.path);
     }
@@ -336,7 +381,6 @@ export const deleteEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       return;
     }
 
-    // Delete associated waste image if exists
     if (eventLog.wasteImage) {
       deleteImageFile(eventLog.wasteImage);
     }
@@ -357,17 +401,12 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
 ): Promise<void> => {
   const userId = getUserIdFromRequest(req);
 
-  // console.log('🔍 [getEventLogsByUserHandler] Extracted userId:', userId);
-
   if (!userId) {
-    // console.log('❌ [getEventLogsByUserHandler] No userId found in token');
     res.status(401).json({ message: 'User ID not found in token' });
     return;
   }
 
   try {
-    // console.log(`📊 [getEventLogsByUserHandler] Querying EventLogs with userId = ${userId}`);
-    
     const eventLogs = await EventLogs.findAll({
       where: { userId },
       include: [
@@ -377,14 +416,7 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
       order: [['checkInTime', 'DESC']]
     });
 
-    // console.log(`✅ [getEventLogsByUserHandler] Query returned ${eventLogs?.length || 0} records`);
-    if (eventLogs?.length > 0) {
-      // console.log('📝 [getEventLogsByUserHandler] First record:', JSON.stringify(eventLogs[0], null, 2));
-    }
-
-    // Check if user has any event logs
     if (!eventLogs || eventLogs.length === 0) {
-      // console.log('⚠️ [getEventLogsByUserHandler] No event logs found for userId:', userId);
       res.status(200).json({
         message: 'No event logs found for this user',
         eventLogs: [],
@@ -400,14 +432,10 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
       return;
     }
 
-    // Calculate user's total stats
     const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
     const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
     const completedEvents = eventLogs.filter(log => log.checkOutTime).length;
-    
     const rewards = calculateRewards(totalHours);
-
-    // console.log('✅ [getEventLogsByUserHandler] Sending response with', eventLogs.length, 'event logs');
 
     res.status(200).json({ 
       message: 'Event logs retrieved successfully',
@@ -422,7 +450,6 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
       }
     });
   } catch (error) {
-    console.log('❌ [getEventLogsByUserHandler] Error:', error);
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_GET_ERROR, error });
   }
@@ -445,7 +472,6 @@ export const getEventLogsByEventHandler: EndpointHandler<EndpointAuthType.JWT> =
       order: [['checkInTime', 'DESC']]
     });
 
-    // Calculate event stats
     const totalParticipants = eventLogs.length;
     const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
     const totalGarbageWeight = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
@@ -498,7 +524,6 @@ export const getUserEventLogsByDateHandler: EndpointHandler<EndpointAuthType.JWT
       order: [['checkInTime', 'ASC']]
     });
 
-    // Calculate daily stats
     const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
     const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
 
@@ -545,7 +570,6 @@ export const getEventLogsByDateRangeHandler: EndpointHandler<EndpointAuthType.JW
       order: [['checkInTime', 'ASC']]
     });
 
-    // Calculate date range stats
     const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
     const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
     const totalGarbageWeight = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
@@ -602,7 +626,6 @@ export const getUserRewardsSummaryHandler: EndpointHandler<EndpointAuthType.JWT>
     const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
     const rewards = calculateRewards(totalHours);
     
-    // Get badge history
     const badgeHistory = [];
     if (totalHours >= BADGE_SILVER_HOURS) badgeHistory.push({ badge: 'silver', hours: BADGE_SILVER_HOURS, earnedAt: new Date() });
     if (totalHours >= BADGE_GOLD_HOURS) badgeHistory.push({ badge: 'gold', hours: BADGE_GOLD_HOURS, earnedAt: new Date() });
