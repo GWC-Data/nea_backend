@@ -35,8 +35,11 @@ export class EventLogs extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   hoursEnrolled!: string;
 
-  @Column({ type: DataType.STRING, allowNull: true })
+  @Column({ type: DataType.TEXT, allowNull: true })
   garbageType!: string;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  eventLocation!: string;
 
   @Column({ type: DataType.STRING, allowNull: true })
   wasteImage!: string;

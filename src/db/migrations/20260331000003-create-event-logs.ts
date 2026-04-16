@@ -23,15 +23,17 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     checkInTime: { type: DataTypes.DATE, allowNull: false },
     checkOutTime: { type: DataTypes.DATE, allowNull: true },
     totalHours: { type: DataTypes.FLOAT, defaultValue: 0 },
-    hoursEnrolled: { type: DataTypes.STRING, allowNull: true },  // NEW COLUMN
+    hoursEnrolled: { type: DataTypes.STRING, allowNull: true },
     garbageWeight: { type: DataTypes.FLOAT, defaultValue: 0 },
-    garbageType: { type: DataTypes.STRING, allowNull: true },
+    garbageType: { type: DataTypes.TEXT, allowNull: true },
     wasteImage: { type: DataTypes.STRING, allowNull: true },
+    eventLocation: { type: DataTypes.STRING, allowNull: true },   // ✅ NEW COLUMN
     createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     updatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
   });
   await queryInterface.addIndex('EventLogs', ['eventId']);
   await queryInterface.addIndex('EventLogs', ['userId']);
+  await queryInterface.addIndex('EventLogs', ['eventLocation']);   // optional index
 }
 
 export async function down(queryInterface: QueryInterface): Promise<void> {

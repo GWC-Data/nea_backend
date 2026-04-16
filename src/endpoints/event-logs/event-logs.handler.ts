@@ -6,7 +6,7 @@ import {
   reportError
 } from 'node-server-engine';
 import { Response } from 'express';
-import { EventLogs, User } from 'db';
+import { EventLogs, User,EventTable } from 'db';
 import {
   EVENT_LOG_NOT_FOUND,
   EVENT_LOG_CREATION_ERROR,
@@ -74,6 +74,95 @@ async function getUserTotalHours(userId: string): Promise<number> {
 }
 
 // ✅ Create Event Log (Check In) with hoursEnrolled
+// export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+//   req: any,
+//   res: Response
+// ): Promise<void> => {
+//   const { eventId, groupId, checkInTime, garbageWeight, garbageType, hoursEnrolled } = req.body;
+//   const userId = getUserIdFromRequest(req);
+
+//   try {
+//     if (!userId) {
+//       res.status(401).json({ message: 'User ID not found in token' });
+//       return;
+//     }
+
+//     // Convert hoursEnrolled to totalHours (float)
+//     let totalHours = 0;
+//     if (hoursEnrolled) {
+//       totalHours = parseHoursEnrolled(hoursEnrolled);
+//     }
+
+//     // Check if groupId column exists in EventLogs table
+//     const attributes = Object.keys(EventLogs.getAttributes());
+//     const hasGroupIdColumn = attributes.includes('groupId');
+
+//     // Check if user already checked in for this event
+//     const existingLog = await EventLogs.findOne({
+//       where: {
+//         eventId,
+//         userId,
+//         checkOutTime: null
+//       }
+//     });
+
+//     if (existingLog) {
+//       res.status(400).json({ message: EVENT_LOG_ALREADY_CHECKED_IN });
+//       return;
+//     }
+
+//     // Build data object with correct types
+//     const eventLogData: any = {
+//       eventId,                       // string (UUID)
+//       userId,                        // string (UUID)
+//       checkInTime: checkInTime ? new Date(checkInTime) : new Date(),
+//       checkOutTime: null,
+//       totalHours,                    // number
+//       hoursEnrolled: hoursEnrolled || null,  // store original string
+//       garbageWeight: garbageWeight ? parseFloat(garbageWeight) : 0,
+//       garbageType: garbageType || null,
+//       wasteImage: null
+//     };
+    
+//     // Only add groupId if column exists and is a valid number
+//     if (hasGroupIdColumn && groupId && groupId !== 'null' && groupId !== null) {
+//       const groupIdNum = parseInt(groupId, 10);
+//       if (!isNaN(groupIdNum)) {
+//         eventLogData.groupId = groupIdNum;
+//       }
+//     }
+
+//     // Handle waste image if uploaded
+//     if (req.file) {
+//       eventLogData.wasteImage = getRelativeImagePath(req.file.path);
+//     }
+
+//     const newEventLog = await EventLogs.create(eventLogData);
+    
+//     // Fetch the created record with associations
+//     const createdEventLog = await EventLogs.findByPk(newEventLog.id, {
+//       include: [
+//         { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+//         { association: 'user', attributes: ['id', 'name', 'email'] },
+//         { association: 'group', attributes: ['groupId', 'groupName'] }
+//       ]
+//     });
+
+//     res.status(200).json({ 
+//       message: 'Check in successful', 
+//       eventLog: createdEventLog
+//     });
+//   } catch (error) {
+//     // Delete uploaded file if there's an error
+//     if (req.file) {
+//       deleteImageFile(req.file.path);
+//     }
+//     reportError(error);
+//     res.status(500).json({ message: EVENT_LOG_CREATION_ERROR, error });
+//   }
+// };
+
+// ✅ Create Event Log (Check In) with hoursEnrolled and eventLocation
 export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: any,
   res: Response
@@ -87,23 +176,23 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       return;
     }
 
-    // Convert hoursEnrolled to totalHours (float)
+    // Fetch the event to get its location
+    const event = await EventTable.findByPk(eventId);
+    if (!event) {
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
     let totalHours = 0;
     if (hoursEnrolled) {
       totalHours = parseHoursEnrolled(hoursEnrolled);
     }
 
-    // Check if groupId column exists in EventLogs table
     const attributes = Object.keys(EventLogs.getAttributes());
     const hasGroupIdColumn = attributes.includes('groupId');
 
-    // Check if user already checked in for this event
     const existingLog = await EventLogs.findOne({
-      where: {
-        eventId,
-        userId,
-        checkOutTime: null
-      }
+      where: { eventId, userId, checkOutTime: null }
     });
 
     if (existingLog) {
@@ -111,20 +200,19 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       return;
     }
 
-    // Build data object with correct types
     const eventLogData: any = {
-      eventId,                       // string (UUID)
-      userId,                        // string (UUID)
+      eventId,
+      userId,
       checkInTime: checkInTime ? new Date(checkInTime) : new Date(),
       checkOutTime: null,
-      totalHours,                    // number
-      hoursEnrolled: hoursEnrolled || null,  // store original string
+      totalHours,
+      hoursEnrolled: hoursEnrolled || null,
       garbageWeight: garbageWeight ? parseFloat(garbageWeight) : 0,
       garbageType: garbageType || null,
-      wasteImage: null
+      wasteImage: null,
+      eventLocation: event.location   // ✅ store current event location
     };
-    
-    // Only add groupId if column exists and is a valid number
+
     if (hasGroupIdColumn && groupId && groupId !== 'null' && groupId !== null) {
       const groupIdNum = parseInt(groupId, 10);
       if (!isNaN(groupIdNum)) {
@@ -132,14 +220,12 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       }
     }
 
-    // Handle waste image if uploaded
     if (req.file) {
       eventLogData.wasteImage = getRelativeImagePath(req.file.path);
     }
 
     const newEventLog = await EventLogs.create(eventLogData);
-    
-    // Fetch the created record with associations
+
     const createdEventLog = await EventLogs.findByPk(newEventLog.id, {
       include: [
         { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
@@ -148,15 +234,9 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       ]
     });
 
-    res.status(200).json({ 
-      message: 'Check in successful', 
-      eventLog: createdEventLog
-    });
+    res.status(200).json({ message: 'Check in successful', eventLog: createdEventLog });
   } catch (error) {
-    // Delete uploaded file if there's an error
-    if (req.file) {
-      deleteImageFile(req.file.path);
-    }
+    if (req.file) deleteImageFile(req.file.path);
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_CREATION_ERROR, error });
   }
@@ -247,12 +327,131 @@ export const getEventLogByIdHandler: EndpointHandler<EndpointAuthType.JWT> = asy
 };
 
 // ✅ Update Event Log (Check Out) with Rewards
+// export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+//   req: any,
+//   res: Response
+// ): Promise<void> => {
+//   const { id } = req.params;
+//   const { checkOutTime, garbageWeight, garbageType } = req.body;
+
+//   try {
+//     const eventLog = await EventLogs.findByPk(id);
+
+//     if (!eventLog) {
+//       res.status(404).json({ message: EVENT_LOG_NOT_FOUND });
+//       return;
+//     }
+
+//     if (checkOutTime) {
+//       const checkOutDate = new Date(checkOutTime);
+//       const checkInDate = new Date(eventLog.checkInTime);
+
+//       if (checkOutDate < checkInDate) {
+//         res.status(400).json({ message: CHECK_OUT_TIME_BEFORE_CHECK_IN });
+//         return;
+//       }
+
+//       // Calculate total hours for this session
+//       const diffMs = checkOutDate.getTime() - checkInDate.getTime();
+//       const sessionHours = diffMs / (1000 * 60 * 60);
+      
+//       // Get user's previous total hours
+//       const previousTotalHours = await getUserTotalHours(eventLog.userId);
+//       const newTotalHours = previousTotalHours + sessionHours;
+      
+//       // Calculate rewards for this session
+//       const sessionRewards = calculateRewards(sessionHours);
+      
+//       // Calculate total rewards (cumulative)
+//       const totalRewards = calculateRewards(newTotalHours);
+
+//       const updateData: any = {
+//         checkOutTime: checkOutDate,
+//         totalHours: sessionHours,
+//         garbageWeight: garbageWeight !== undefined ? parseFloat(garbageWeight) : eventLog.garbageWeight,
+//         garbageType: garbageType !== undefined ? garbageType : eventLog.garbageType
+//       };
+
+//       // Handle waste image upload
+//       if (req.file) {
+//         if (eventLog.wasteImage) {
+//           deleteImageFile(eventLog.wasteImage);
+//         }
+//         updateData.wasteImage = getRelativeImagePath(req.file.path);
+//       }
+
+//       await eventLog.update(updateData);
+
+//       // Get updated event log with associations
+//       const updatedEventLog = await EventLogs.findByPk(id, {
+//         include: [
+//           { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+//           { association: 'user', attributes: ['id', 'name', 'email'] },
+//           { association: 'group', attributes: ['groupId', 'groupName'] }
+//         ]
+//       });
+
+//       // Prepare response with rewards
+//       const responseData: any = {
+//         message: 'Check out successful',
+//         eventLog: updatedEventLog,
+//         sessionRewards: {
+//           hours: sessionHours.toFixed(2),
+//           minutes: Math.floor(sessionHours * 60),
+//           points: sessionRewards.points,
+//           badge: sessionRewards.badge,
+//           badgeMessage: sessionRewards.message
+//         },
+//         totalRewards: {
+//           totalHours: newTotalHours.toFixed(2),
+//           totalMinutes: Math.floor(newTotalHours * 60),
+//           totalPoints: totalRewards.points,
+//           badge: totalRewards.badge,
+//           badgeMessage: totalRewards.message
+//         }
+//       };
+
+//       res.status(200).json(responseData);
+//     } else {
+//       // Partial update (no check-out)
+//       const updateData: any = {};
+//       if (garbageWeight !== undefined) updateData.garbageWeight = parseFloat(garbageWeight);
+//       if (garbageType !== undefined) updateData.garbageType = garbageType;
+
+//       if (req.file) {
+//         if (eventLog.wasteImage) {
+//           deleteImageFile(eventLog.wasteImage);
+//         }
+//         updateData.wasteImage = getRelativeImagePath(req.file.path);
+//       }
+
+//       await eventLog.update(updateData);
+      
+//       const updatedEventLog = await EventLogs.findByPk(id, {
+//         include: [
+//           { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+//           { association: 'user', attributes: ['id', 'name', 'email'] },
+//           { association: 'group', attributes: ['groupId', 'groupName'] }
+//         ]
+//       });
+      
+//       res.status(200).json({ message: 'Event log updated successfully', eventLog: updatedEventLog });
+//     }
+//   } catch (error) {
+//     if (req.file) {
+//       deleteImageFile(req.file.path);
+//     }
+//     reportError(error);
+//     res.status(500).json({ message: EVENT_LOG_UPDATE_ERROR, error });
+//   }
+// };
+
 export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: any,
   res: Response
 ): Promise<void> => {
   const { id } = req.params;
-  const { checkOutTime, garbageWeight, garbageType } = req.body;
+  const { checkOutTime, garbageWeight, garbageType, eventLocation } = req.body;  // ✅ added eventLocation
 
   try {
     const eventLog = await EventLogs.findByPk(id);
@@ -271,18 +470,13 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
         return;
       }
 
-      // Calculate total hours for this session
       const diffMs = checkOutDate.getTime() - checkInDate.getTime();
       const sessionHours = diffMs / (1000 * 60 * 60);
       
-      // Get user's previous total hours
       const previousTotalHours = await getUserTotalHours(eventLog.userId);
       const newTotalHours = previousTotalHours + sessionHours;
       
-      // Calculate rewards for this session
       const sessionRewards = calculateRewards(sessionHours);
-      
-      // Calculate total rewards (cumulative)
       const totalRewards = calculateRewards(newTotalHours);
 
       const updateData: any = {
@@ -292,7 +486,11 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
         garbageType: garbageType !== undefined ? garbageType : eventLog.garbageType
       };
 
-      // Handle waste image upload
+      // ✅ Allow updating eventLocation
+      if (eventLocation !== undefined) {
+        updateData.eventLocation = eventLocation;
+      }
+
       if (req.file) {
         if (eventLog.wasteImage) {
           deleteImageFile(eventLog.wasteImage);
@@ -302,7 +500,6 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
 
       await eventLog.update(updateData);
 
-      // Get updated event log with associations
       const updatedEventLog = await EventLogs.findByPk(id, {
         include: [
           { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
@@ -311,7 +508,6 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
         ]
       });
 
-      // Prepare response with rewards
       const responseData: any = {
         message: 'Check out successful',
         eventLog: updatedEventLog,
@@ -337,6 +533,7 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       const updateData: any = {};
       if (garbageWeight !== undefined) updateData.garbageWeight = parseFloat(garbageWeight);
       if (garbageType !== undefined) updateData.garbageType = garbageType;
+      if (eventLocation !== undefined) updateData.eventLocation = eventLocation;  // ✅
 
       if (req.file) {
         if (eventLog.wasteImage) {
