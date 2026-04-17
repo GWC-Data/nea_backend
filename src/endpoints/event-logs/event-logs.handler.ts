@@ -25,20 +25,20 @@ import { Op } from 'sequelize';
 import { deleteImageFile, getRelativeImagePath } from 'config/multerConfig';
 
 // Helper: convert "30min", "1hours", "1.5hours" to totalHours (float)
-function parseHoursEnrolled(value: string): number {
-  if (!value) return 0;
-  const str = value.trim().toLowerCase();
-  if (str.endsWith('min')) {
-    const mins = parseFloat(str);
-    return isNaN(mins) ? 0 : mins / 60;
-  }
-  if (str.endsWith('hours')) {
-    const hrs = parseFloat(str);
-    return isNaN(hrs) ? 0 : hrs;
-  }
-  const hrs = parseFloat(str);
-  return isNaN(hrs) ? 0 : hrs;
-}
+// function parseHoursEnrolled(value: string): number {
+//   if (!value) return 0;
+//   const str = value.trim().toLowerCase();
+//   if (str.endsWith('min')) {
+//     const mins = parseFloat(str);
+//     return isNaN(mins) ? 0 : mins / 60;
+//   }
+//   if (str.endsWith('hours')) {
+//     const hrs = parseFloat(str);
+//     return isNaN(hrs) ? 0 : hrs;
+//   }
+//   const hrs = parseFloat(str);
+//   return isNaN(hrs) ? 0 : hrs;
+// }
 
 // Helper function to calculate rewards
 function calculateRewards(totalHours: number): { points: number; badge: string | null; message: string | null } {
@@ -68,8 +68,27 @@ const getUserIdFromRequest = (req: any): string | undefined => {
 };
 
 // Helper function to get user's total hours across all logs (accepts UUID string)
-async function getUserTotalHours(userId: string): Promise<number> {
+export async function getUserTotalHours(userId: string): Promise<number> {
   const logs = await EventLogs.findAll({ where: { userId } });
+  return logs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+}
+
+// Helper function to get user's total hours for today (accepts UUID string)
+export async function getUserTodayHours(userId: string): Promise<number> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const logs = await EventLogs.findAll({
+    where: {
+      userId,
+      checkInTime: {
+        [Op.gte]: today,
+        [Op.lt]: tomorrow
+      }
+    }
+  });
   return logs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
 }
 
@@ -184,8 +203,17 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
     }
 
     let totalHours = 0;
-    if (hoursEnrolled) {
-      totalHours = parseHoursEnrolled(hoursEnrolled);
+    // if (hoursEnrolled) {
+    //   totalHours = parseHoursEnrolled(hoursEnrolled);
+    // }
+
+    // Enforce 2-hour daily limit
+    const todayHours = await getUserTodayHours(userId);
+    if (todayHours + totalHours > 2) {
+      res.status(400).json({ 
+        message: `You have already logged ${todayHours.toFixed(1)} hours today. Daily limit is 2 hours. You can only log ${ (2 - todayHours).toFixed(1) } more hours.` 
+      });
+      return;
     }
 
     const attributes = Object.keys(EventLogs.getAttributes());

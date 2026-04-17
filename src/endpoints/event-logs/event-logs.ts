@@ -129,6 +129,7 @@ export const getAllEventLogsEndpoint = new Endpoint({
 // Specific paths MUST come before generic paths with parameters
 export const orderedEventLogsEndpoints = [
   createEventLogEndpoint, // POST /event-logs
+  getTimerEndpoint, // GET /timer
   getUserRewardsSummaryEndpoint, // GET /event-logs/user/rewards (most specific)
   getUserEventLogsByDateEndpoint, // GET /event-logs/user/date/:date
   getEventLogsByUserEndpoint, // GET /event-logs/user ✅ CRITICAL - before /:id

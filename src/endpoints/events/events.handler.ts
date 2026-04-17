@@ -17,6 +17,7 @@ import {
 } from './events.const';
 import { Op } from 'sequelize';
 import { getRelativeImagePath } from 'config/multerConfig';
+import { getUserTodayHours } from '../event-logs/event-logs.handler';
 
 // Helper function to get user ID from request (UUID string)
 const getUserIdFromRequest = (req: any): string | undefined => {
@@ -671,7 +672,8 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
         totalPoints,
         co2Collected: parseFloat(co2Collected),
         totalMinutesLogged,
-        totalWeight: parseFloat(totalGarbageCollected.toFixed(2))
+        totalWeight: parseFloat(totalGarbageCollected.toFixed(2)),
+        todayHours: await getUserTodayHours(userId)
       },
       eventsJoined: eventsJoinedWithDetails
     });
