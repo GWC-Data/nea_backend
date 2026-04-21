@@ -1,128 +1,41 @@
-// 20260331000003-create-event-logs.ts
-
 import { QueryInterface, DataTypes } from 'sequelize';
 
 export async function up(queryInterface: QueryInterface): Promise<void> {
-  const dialect = (process.env.SQL_TYPE ?? 'postgres').toLowerCase();
-
   await queryInterface.createTable('EventLogs', {
-    id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
-      primaryKey: true
-    },
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
     eventId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: false,
-      references: {
-        model: 'EventTable',
-        key: 'eventId'
-      },
-      onUpdate: 'CASCADE',
+      references: { model: 'EventTable', key: 'eventId' },
       onDelete: 'CASCADE'
     },
     userId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: false,
-      references: {
-        model: 'Users',
-        key: 'id'
-      },
-      onUpdate: 'CASCADE',
+      references: { model: 'Users', key: 'id' },
       onDelete: 'CASCADE'
     },
     groupId: {
       type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: 'GroupTable',
-        key: 'groupId'
-      },
-      onUpdate: 'CASCADE',
+      references: { model: 'GroupTable', key: 'groupId' },
       onDelete: 'SET NULL'
     },
-    checkInTime: {
-      type: DataTypes.DATE,
-      allowNull: false
-    },
-    checkOutTime: {
-      type: DataTypes.DATE,
-      allowNull: true
-    },
-    totalHours: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-      defaultValue: 0
-    },
-    garbageWeight: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-      defaultValue: 0
-    },
-    garbageType: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: false
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: false
-    }
+    checkInTime: { type: DataTypes.DATE, allowNull: false },
+    checkOutTime: { type: DataTypes.DATE, allowNull: true },
+    totalHours: { type: DataTypes.FLOAT, defaultValue: 0 },
+    hoursEnrolled: { type: DataTypes.STRING, allowNull: true },
+    garbageWeight: { type: DataTypes.FLOAT, defaultValue: 0 },
+    garbageType: { type: DataTypes.TEXT, allowNull: true },
+    wasteImage: { type: DataTypes.STRING, allowNull: true },
+    eventLocation: { type: DataTypes.STRING, allowNull: true },   // ✅ NEW COLUMN
+    createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+    updatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
   });
-
-  // Create indexes for better query performance
   await queryInterface.addIndex('EventLogs', ['eventId']);
   await queryInterface.addIndex('EventLogs', ['userId']);
-  await queryInterface.addIndex('EventLogs', ['groupId']);
-  await queryInterface.addIndex('EventLogs', ['checkInTime']);
-  
-  // Dialect-specific timestamp defaults
-  if (dialect === 'mysql') {
-    await queryInterface.sequelize.query(`
-      ALTER TABLE EventLogs
-      MODIFY createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      MODIFY updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL;
-    `);
-  } else if (dialect === 'postgres') {
-    await queryInterface.sequelize.query(`
-      ALTER TABLE "EventLogs"
-      ALTER COLUMN "createdAt" SET DEFAULT NOW(),
-      ALTER COLUMN "updatedAt" SET DEFAULT NOW();
-    `);
-  } else if (dialect === 'mssql') {
-    await queryInterface.sequelize.query(`
-      ALTER TABLE EventLogs
-      ADD CONSTRAINT DF_EventLogs_createdAt DEFAULT GETDATE() FOR createdAt;
-    `);
-    await queryInterface.sequelize.query(`
-      ALTER TABLE EventLogs
-      ADD CONSTRAINT DF_EventLogs_updatedAt DEFAULT GETDATE() FOR updatedAt;
-    `);
-  } else {
-    throw new Error('Unsupported SQL dialect');
-  }
+  await queryInterface.addIndex('EventLogs', ['eventLocation']);   // optional index
 }
 
 export async function down(queryInterface: QueryInterface): Promise<void> {
-  const dialect = (process.env.SQL_TYPE ?? 'postgres').toLowerCase();
-  
   await queryInterface.dropTable('EventLogs');
-  
-  if (dialect === 'mssql') {
-    try {
-      await queryInterface.sequelize.query(`
-        IF OBJECT_ID('DF_EventLogs_createdAt', 'D') IS NOT NULL
-          ALTER TABLE EventLogs DROP CONSTRAINT DF_EventLogs_createdAt;
-      `);
-      await queryInterface.sequelize.query(`
-        IF OBJECT_ID('DF_EventLogs_updatedAt', 'D') IS NOT NULL
-          ALTER TABLE EventLogs DROP CONSTRAINT DF_EventLogs_updatedAt;
-      `);
-    } catch (error) {
-      console.warn('Error dropping constraints:', error);
-    }
-  }
 }

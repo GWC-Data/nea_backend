@@ -1,129 +1,55 @@
-
-
-import {
-  Table,
-  Column,
-  Model,
-  DataType,
-  ForeignKey,
-  BelongsTo
-} from 'sequelize-typescript';
+import { Table, Column, Model, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import { User } from './User';
 import { EventTable } from './EventTable';
 import { GroupTable } from './GroupTable';
 
-@Table({
-  tableName: 'EventLogs',
-  timestamps: true,
-  underscored: false
-})
+@Table({ tableName: 'EventLogs', timestamps: true })
 export class EventLogs extends Model {
-
-  @Column({
-    type: DataType.INTEGER,
-    autoIncrement: true,
-    primaryKey: true
-  })
+  @Column({ type: DataType.INTEGER, autoIncrement: true, primaryKey: true })
   declare id: number;
 
   @ForeignKey(() => EventTable)
-  @Column({
-    type: DataType.INTEGER,
-    allowNull: false
-  })
-  eventId!: number;
+  @Column({ type: DataType.UUID, allowNull: false })
+  eventId!: string;
 
   @ForeignKey(() => User)
-  @Column({
-    type: DataType.INTEGER,
-    allowNull: false
-  })
-  userId!: number;
+  @Column({ type: DataType.UUID, allowNull: false })
+  userId!: string;
 
   @ForeignKey(() => GroupTable)
-  @Column({
-    type: DataType.INTEGER,
-    allowNull: true
-  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
   groupId!: number;
 
-  @Column({
-    type: DataType.DATE,
-    allowNull: false
-  })
+  @Column({ type: DataType.DATE, allowNull: false })
   checkInTime!: Date;
 
-  @Column({
-    type: DataType.DATE,
-    allowNull: true
-  })
-  checkOutTime!: Date;
+  @Column({ type: DataType.DATE, allowNull: true })
+  checkOutTime!: Date | null;
 
-  @Column({
-    type: DataType.FLOAT,
-    allowNull: true,
-    defaultValue: 0
-  })
+  @Column({ type: DataType.FLOAT, defaultValue: 0 })
   totalHours!: number;
 
-  @Column({
-    type: DataType.FLOAT,
-    allowNull: true,
-    defaultValue: 0
-  })
+  @Column({ type: DataType.FLOAT, defaultValue: 0 })
   garbageWeight!: number;
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: true
-  })
+  @Column({ type: DataType.STRING, allowNull: true })
+  hoursEnrolled!: string;
+
+  @Column({ type: DataType.TEXT, allowNull: true })
   garbageType!: string;
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: true
-  })
+  @Column({ type: DataType.STRING, allowNull: true })
+  eventLocation!: string;
+
+  @Column({ type: DataType.STRING, allowNull: true })
   wasteImage!: string;
 
-  @Column({
-    type: DataType.DATE,
-    allowNull: false,
-    defaultValue: DataType.NOW
-  })
-  declare createdAt: Date;
-
-  @Column({
-    type: DataType.DATE,
-    allowNull: false,
-    defaultValue: DataType.NOW
-  })
-  declare updatedAt: Date;
-
-  // Associations
-  @BelongsTo(() => User, { foreignKey: 'userId', as: 'user' })
+  @BelongsTo(() => User)
   user!: User;
 
-  @BelongsTo(() => EventTable, { foreignKey: 'eventId', as: 'event' })
+  @BelongsTo(() => EventTable)
   event!: EventTable;
 
-  @BelongsTo(() => GroupTable, { foreignKey: 'groupId', as: 'group' })
+  @BelongsTo(() => GroupTable)
   group!: GroupTable;
-
-  // Virtual fields
-  get durationInHours(): number {
-    if (this.checkInTime && this.checkOutTime) {
-      const diff = this.checkOutTime.getTime() - this.checkInTime.getTime();
-      return diff / (1000 * 60 * 60);
-    }
-    return 0;
-  }
-
-  get status(): string {
-    if (this.checkInTime && !this.checkOutTime) {
-      return 'active';
-    } else if (this.checkInTime && this.checkOutTime) {
-      return 'completed';
-    }
-    return 'pending';
-  }
 }

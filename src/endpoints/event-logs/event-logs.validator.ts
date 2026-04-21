@@ -123,6 +123,17 @@ export const updateEventLogValidator: Schema = {
             options: { max: 50 },
             errorMessage: 'Garbage type must be less than 50 characters',
         }
+    },
+    eventLocation: {
+        in: 'body',
+        optional: true,
+        isString: {
+            errorMessage: 'Event location must be a string',
+        },
+        isLength: {
+            options: { max: 255 },
+            errorMessage: 'Event location must be less than 255 characters',
+        }
     }
 };
 

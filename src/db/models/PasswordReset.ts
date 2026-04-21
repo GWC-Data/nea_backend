@@ -1,16 +1,9 @@
-import {
-  Table,
-  Column,
-  Model,
-  DataType,
-  ForeignKey,
-  BelongsTo
-} from 'sequelize-typescript';
+import { Table, Column, Model, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import { User } from './User';
 
 @Table({
   tableName: 'password_resets',
-  timestamps: false, // created_at is handled by DB default
+  timestamps: false,
   underscored: true
 })
 export class PasswordReset extends Model {
@@ -23,12 +16,12 @@ export class PasswordReset extends Model {
 
   @ForeignKey(() => User)
   @Column({
-    type: DataType.INTEGER,
+    type: DataType.UUID,
     allowNull: false
   })
-  userId!: number;
+  userId!: string;   // ✅ string, not number
 
-  @BelongsTo(() => User, { as: 'user' })
+  @BelongsTo(() => User, { foreignKey: 'userId', as: 'user' })
   user!: User;
 
   @Column({
