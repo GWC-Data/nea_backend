@@ -18,10 +18,14 @@ import {
 import { Op } from 'sequelize';
 import { getRelativeImagePath } from 'config/multerConfig';
 import { getUserTodayHours } from '../event-logs/event-logs.handler';
+import fs from 'fs';
+import path from 'path';
 
 // Helper function to get user ID from request (UUID string)
 const getUserIdFromRequest = (req: any): string | undefined => {
-  return req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id;
+  return (
+    req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id
+  );
 };
 
 // ✅ Create Event
@@ -39,7 +43,9 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     }
 
     if (!date || !location || !name) {
-      res.status(400).json({ message: 'date, location, and name are required' });
+      res
+        .status(400)
+        .json({ message: 'date, location, and name are required' });
       return;
     }
 
@@ -69,7 +75,9 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       createdBy: createdBy
     });
 
-    res.status(200).json({ message: 'Event created successfully', event: newEvent });
+    res
+      .status(200)
+      .json({ message: 'Event created successfully', event: newEvent });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_CREATION_ERROR, error });
@@ -77,7 +85,9 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 };
 
 // ✅ Get All Events
-export const getAllEventsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getAllEventsHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   _req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -91,7 +101,9 @@ export const getAllEventsHandler: EndpointHandler<EndpointAuthType.JWT> = async 
 };
 
 // ✅ Get Event By ID (UUID)
-export const getEventByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getEventByIdHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -105,7 +117,8 @@ export const getEventByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async 
     }
 
     let participants = event.participants;
-    if (typeof participants === 'string') participants = JSON.parse(participants);
+    if (typeof participants === 'string')
+      participants = JSON.parse(participants);
 
     res.status(200).json({
       event,
@@ -125,7 +138,18 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   res: Response
 ): Promise<void> => {
   const { id } = req.params;
-  const { date, location, name, details, description, rewards } = req.body;
+
+  const {
+    date,
+    location,
+    name,
+    details,
+    description,
+    rewards,
+    participants,
+    joinsCount
+  } = req.body;
+
   const userId = getUserIdFromRequest(req);
 
   try {
@@ -140,17 +164,21 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
+    // ✅ Date validation
     if (date) {
       const eventDate = new Date(date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+
       if (eventDate < today) {
         res.status(400).json({ message: EVENT_DATE_PAST });
         return;
       }
     }
 
+    // ✅ Prepare update object
     const updateData: any = {};
+
     if (date !== undefined) updateData.date = date;
     if (location !== undefined) updateData.location = location;
     if (name !== undefined) updateData.name = name;
@@ -158,12 +186,57 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     if (description !== undefined) updateData.description = description;
     if (rewards !== undefined) updateData.rewards = rewards;
 
+    // ✅ participants
+    if (participants !== undefined) {
+      try {
+        updateData.participants =
+          typeof participants === 'string'
+            ? JSON.parse(participants)
+            : participants;
+      } catch {
+        res.status(400).json({ message: 'Invalid participants format' });
+        return;
+      }
+    }
+
+    // ✅ joinsCount
+    if (joinsCount !== undefined) {
+      updateData.joinsCount = Number(joinsCount);
+    }
+
+    // ✅ IMAGE UPDATE + DELETE OLD IMAGE
+    if ((req as any).file) {
+      const newImagePath = getRelativeImagePath((req as any).file.path);
+
+      // 🔥 delete old image
+      if (event.event_image) {
+        const oldPath = path.join(process.cwd(), event.event_image);
+
+        if (fs.existsSync(oldPath)) {
+          fs.unlinkSync(oldPath);
+        }
+      }
+
+      updateData.event_image = newImagePath;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      res.status(400).json({ message: 'No valid fields provided to update' });
+      return;
+    }
+
     await event.update(updateData);
 
-    res.status(200).json({ message: 'Event updated successfully', event });
+    res.status(200).json({
+      message: 'Event updated successfully',
+      event
+    });
   } catch (error) {
     reportError(error);
-    res.status(500).json({ message: EVENT_UPDATE_ERROR, error });
+    res.status(500).json({
+      message: EVENT_UPDATE_ERROR,
+      error
+    });
   }
 };
 
@@ -188,7 +261,9 @@ export const deleteEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     }
 
     await event.destroy();
-    res.status(200).json({ message: 'Event deleted successfully', eventId: event.eventId });
+    res
+      .status(200)
+      .json({ message: 'Event deleted successfully', eventId: event.eventId });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_DELETION_ERROR, error });
@@ -196,7 +271,9 @@ export const deleteEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 };
 
 // ✅ Get Events by Date
-export const getEventsByDateHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getEventsByDateHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -223,7 +300,9 @@ export const getEventsByDateHandler: EndpointHandler<EndpointAuthType.JWT> = asy
 };
 
 // ✅ Get Upcoming Events
-export const getUpcomingEventsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getUpcomingEventsHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   _req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -242,7 +321,9 @@ export const getUpcomingEventsHandler: EndpointHandler<EndpointAuthType.JWT> = a
 };
 
 // ✅ Get Popular Events
-export const getPopularEventsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getPopularEventsHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -286,11 +367,15 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     }
 
     let participants: string[] = event.participants || [];
-    if (typeof participants === 'string') participants = JSON.parse(participants);
+    if (typeof participants === 'string')
+      participants = JSON.parse(participants);
 
     // Check if user already joined (by user.id UUID)
     if (participants.includes(user.id)) {
-      res.status(400).json({ message: 'You have already joined this event.', success: false });
+      res.status(400).json({
+        message: 'You have already joined this event.',
+        success: false
+      });
       return;
     }
 
@@ -308,7 +393,8 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     await event.update(updateData);
 
     let joinedEvents: string[] = user.joinedEvents || [];
-    if (typeof joinedEvents === 'string') joinedEvents = JSON.parse(joinedEvents);
+    if (typeof joinedEvents === 'string')
+      joinedEvents = JSON.parse(joinedEvents);
     if (!joinedEvents.includes(event.eventId)) {
       await user.update({ joinedEvents: [...joinedEvents, event.eventId] });
     }
@@ -356,21 +442,25 @@ export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     }
 
     let participants: string[] = event.participants || [];
-    if (typeof participants === 'string') participants = JSON.parse(participants);
+    if (typeof participants === 'string')
+      participants = JSON.parse(participants);
     if (!participants.includes(user.id)) {
       res.status(400).json({ message: 'User has not joined this event' });
       return;
     }
 
-    const updatedParticipants = participants.filter(id => id !== user.id);
+    const updatedParticipants = participants.filter((id) => id !== user.id);
     await event.update({
       participants: updatedParticipants,
       joinsCount: updatedParticipants.length
     });
 
     let joinedEvents: string[] = user.joinedEvents || [];
-    if (typeof joinedEvents === 'string') joinedEvents = JSON.parse(joinedEvents);
-    const updatedJoinedEvents = joinedEvents.filter(eid => eid !== event.eventId);
+    if (typeof joinedEvents === 'string')
+      joinedEvents = JSON.parse(joinedEvents);
+    const updatedJoinedEvents = joinedEvents.filter(
+      (eid) => eid !== event.eventId
+    );
     await user.update({ joinedEvents: updatedJoinedEvents });
 
     res.status(200).json({
@@ -389,7 +479,9 @@ export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 };
 
 // ✅ Get Event Participants
-export const getEventParticipantsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getEventParticipantsHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -403,7 +495,8 @@ export const getEventParticipantsHandler: EndpointHandler<EndpointAuthType.JWT> 
     }
 
     let participantIds: string[] = event.participants || [];
-    if (typeof participantIds === 'string') participantIds = JSON.parse(participantIds);
+    if (typeof participantIds === 'string')
+      participantIds = JSON.parse(participantIds);
 
     const participants = await User.findAll({
       where: { id: participantIds },
@@ -415,7 +508,11 @@ export const getEventParticipantsHandler: EndpointHandler<EndpointAuthType.JWT> 
       eventName: event.name,
       joinsCount: event.joinsCount,
       participantIds,
-      participants: participants.map(p => ({ userId: p.id, name: p.name, email: p.email }))
+      participants: participants.map((p) => ({
+        userId: p.id,
+        name: p.name,
+        email: p.email
+      }))
     });
   } catch (error) {
     reportError(error);
@@ -424,7 +521,9 @@ export const getEventParticipantsHandler: EndpointHandler<EndpointAuthType.JWT> 
 };
 
 // ✅ Get User Joined Events
-export const getUserJoinedEventsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getUserJoinedEventsHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -452,7 +551,7 @@ export const getUserJoinedEventsHandler: EndpointHandler<EndpointAuthType.JWT> =
         where: { eventId: eventIds },
         attributes: ['eventId', 'name', 'location', 'date', 'joinsCount']
       });
-      joinedEventsWithDetails = events.map(event => ({
+      joinedEventsWithDetails = events.map((event) => ({
         eventId: event.eventId,
         eventName: event.name,
         location: event.location,
@@ -476,10 +575,9 @@ export const getUserJoinedEventsHandler: EndpointHandler<EndpointAuthType.JWT> =
 };
 
 // ✅ Get Event Profile (No Auth)
-export const getEventProfileHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req: any,
-  res: Response
-): Promise<void> => {
+export const getEventProfileHandler: EndpointHandler<
+  EndpointAuthType.NONE
+> = async (req: any, res: Response): Promise<void> => {
   const { eventId } = req.params;
 
   try {
@@ -487,7 +585,13 @@ export const getEventProfileHandler: EndpointHandler<EndpointAuthType.NONE> = as
       include: [
         {
           association: 'eventLogs',
-          attributes: ['id', 'userId', 'checkInTime', 'checkOutTime', 'totalHours']
+          attributes: [
+            'id',
+            'userId',
+            'checkInTime',
+            'checkOutTime',
+            'totalHours'
+          ]
         }
       ]
     });
@@ -513,7 +617,9 @@ export const getEventProfileHandler: EndpointHandler<EndpointAuthType.NONE> = as
       participants: joinedCount
     };
 
-    res.status(200).json({ message: 'Event profile retrieved successfully', eventProfile });
+    res
+      .status(200)
+      .json({ message: 'Event profile retrieved successfully', eventProfile });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: 'Error fetching event profile', error });
@@ -521,17 +627,16 @@ export const getEventProfileHandler: EndpointHandler<EndpointAuthType.NONE> = as
 };
 
 // ✅ Get All Events Profiles (No Auth)
-export const getAllEventsProfileHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  _req: any,
-  res: Response
-): Promise<void> => {
+export const getAllEventsProfileHandler: EndpointHandler<
+  EndpointAuthType.NONE
+> = async (_req: any, res: Response): Promise<void> => {
   try {
     const events = await EventTable.findAll({
       include: [{ association: 'eventLogs', attributes: ['id', 'userId'] }],
       order: [['date', 'DESC']]
     });
 
-    const eventsProfile = events.map(event => ({
+    const eventsProfile = events.map((event) => ({
       eventId: event.eventId,
       eventName: event.name,
       location: event.location,
@@ -555,7 +660,9 @@ export const getAllEventsProfileHandler: EndpointHandler<EndpointAuthType.NONE> 
 };
 
 // ✅ Get Leaderboard (across all events)
-export const getLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getLeaderboardHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   _req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -596,7 +703,7 @@ export const getLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
         totalGarbageWeight: parseFloat(user.totalGarbageWeight.toFixed(2)),
         eventsParticipated: user.eventsParticipated,
         co2Offset: parseFloat((user.totalGarbageWeight * 0.5).toFixed(2)),
-        points: Math.floor((user.totalHours * 60 / 30) * 5)
+        points: Math.floor(((user.totalHours * 60) / 30) * 5)
       }));
 
     res.status(200).json({
@@ -611,7 +718,9 @@ export const getLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
 };
 
 // ✅ Get Dashboard (User Profile)
-export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getDashboardHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -637,9 +746,16 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
     if (eventIds.length > 0) {
       const fullEvents = await EventTable.findAll({
         where: { eventId: { [Op.in]: eventIds } },
-        attributes: ['eventId', 'name', 'location', 'date', 'joinsCount', 'event_image']
+        attributes: [
+          'eventId',
+          'name',
+          'location',
+          'date',
+          'joinsCount',
+          'event_image'
+        ]
       });
-      eventsJoinedWithDetails = fullEvents.map(event => ({
+      eventsJoinedWithDetails = fullEvents.map((event) => ({
         eventId: event.eventId,
         eventName: event.name,
         location: event.location,
@@ -654,9 +770,15 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
       attributes: ['totalHours', 'garbageWeight']
     });
 
-    const totalHours = eventLogs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
+    const totalHours = eventLogs.reduce(
+      (sum, log) => sum + (log.totalHours || 0),
+      0
+    );
     const totalMinutesLogged = Math.floor(totalHours * 60);
-    const totalGarbageCollected = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
+    const totalGarbageCollected = eventLogs.reduce(
+      (sum, log) => sum + (log.garbageWeight || 0),
+      0
+    );
     const co2Collected = (totalGarbageCollected * 0.5).toFixed(2);
     const totalPoints = Math.floor((totalMinutesLogged / 30) * 5);
 
@@ -684,7 +806,9 @@ export const getDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async 
 };
 
 // ✅ Get Event Leaderboard
-export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getEventLeaderboardHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -702,7 +826,13 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
     const eventLogs = await EventLogs.findAll({
       where: { eventId: event.eventId },
       include: [{ association: 'user', attributes: ['id', 'name', 'email'] }],
-      attributes: ['userId', 'totalHours', 'garbageWeight', 'checkInTime', 'checkOutTime']
+      attributes: [
+        'userId',
+        'totalHours',
+        'garbageWeight',
+        'checkInTime',
+        'checkOutTime'
+      ]
     });
 
     const userStatsMap = new Map<string, any>();
@@ -725,10 +855,18 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
       stats.totalHours += log.totalHours || 0;
       stats.totalGarbageWeight += log.garbageWeight || 0;
       stats.logsCount += 1;
-      if (log.checkInTime && (!stats.checkInTime || new Date(log.checkInTime) < new Date(stats.checkInTime))) {
+      if (
+        log.checkInTime &&
+        (!stats.checkInTime ||
+          new Date(log.checkInTime) < new Date(stats.checkInTime))
+      ) {
         stats.checkInTime = log.checkInTime;
       }
-      if (log.checkOutTime && (!stats.checkOutTime || new Date(log.checkOutTime) > new Date(stats.checkOutTime))) {
+      if (
+        log.checkOutTime &&
+        (!stats.checkOutTime ||
+          new Date(log.checkOutTime) > new Date(stats.checkOutTime))
+      ) {
         stats.checkOutTime = log.checkOutTime;
       }
     });
@@ -762,6 +900,8 @@ export const getEventLeaderboardHandler: EndpointHandler<EndpointAuthType.JWT> =
     });
   } catch (error) {
     reportError(error);
-    res.status(500).json({ message: 'Error fetching event leaderboard', error });
+    res
+      .status(500)
+      .json({ message: 'Error fetching event leaderboard', error });
   }
 };
