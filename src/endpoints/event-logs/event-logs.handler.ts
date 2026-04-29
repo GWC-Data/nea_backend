@@ -256,7 +256,7 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
 
     const createdEventLog = await EventLogs.findByPk(newEventLog.id, {
       include: [
-        { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+        { association: 'event', attributes: ['eventId', 'name', 'location', 'startDate'] },
         { association: 'user', attributes: ['id', 'name', 'email'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ]
@@ -530,7 +530,7 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
 
       const updatedEventLog = await EventLogs.findByPk(id, {
         include: [
-          { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+          { association: 'event', attributes: ['eventId', 'name', 'location', 'startDate', 'endDate'] },
           { association: 'user', attributes: ['id', 'name', 'email'] },
           { association: 'group', attributes: ['groupId', 'groupName'] }
         ]

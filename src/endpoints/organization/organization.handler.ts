@@ -393,3 +393,36 @@ export const addUserToOrganizationHandler: EndpointHandler<EndpointAuthType.JWT>
     res.status(500).json({ message: ORGANIZATION_UPDATE_ERROR, error });
   }
 };
+
+// ✅ Get Organization Leaderboard
+export const getOrganizationLeaderboardHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+  req: any,
+  res: Response
+): Promise<void> => {
+  try {
+    const { limit = 5 } = req.query;
+    
+    const organizations = await Organization.findAll({
+      attributes: ['orgId', 'orgName', 'totalHours', 'totalGarbageWeight', 'userIds'],
+      order: [['totalHours', 'DESC']],
+      limit: parseInt(limit as string, 10) || 5
+    });
+
+    const leaderboard = organizations.map((org, index) => ({
+      rank: index + 1,
+      orgId: org.orgId,
+      orgName: org.orgName,
+      totalHours: org.totalHours || 0,
+      totalGarbageWeight: org.totalGarbageWeight || 0,
+      memberCount: (org.userIds as string[])?.length || 0
+    }));
+
+    res.status(200).json({
+      message: 'Organization leaderboard retrieved successfully',
+      leaderboard
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching organization leaderboard', error });
+  }
+};

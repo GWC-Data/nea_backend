@@ -13,6 +13,7 @@ import {
   deleteOrganizationHandler,
   getOrganizationDashboardHandler,
   addUserToOrganizationHandler,
+  getOrganizationLeaderboardHandler,
 } from './organization.handler';
 
 // ✅ POST - Create Organization (no auth required for registration)
@@ -22,6 +23,15 @@ export const createOrganizationEndpoint = new Endpoint({
   handler: createOrganizationHandler,
   authType: EndpointAuthType.NONE,
   validator: createOrganizationValidator,
+});
+
+// ✅ GET - Organization Leaderboard (no auth required)
+export const getOrganizationLeaderboardEndpoint = new Endpoint({
+  path: '/organizations/leaderboard/top',
+  method: EndpointMethod.GET,
+  handler: getOrganizationLeaderboardHandler,
+  authType: EndpointAuthType.NONE,
+  validator: {},
 });
 
 // ✅ MORE SPECIFIC ROUTES BEFORE GENERIC ONES
