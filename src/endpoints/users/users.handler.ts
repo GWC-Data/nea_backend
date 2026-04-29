@@ -517,6 +517,14 @@ export const getFullUserProfileHandler: EndpointHandler<EndpointAuthType.JWT> = 
   res: Response
 ): Promise<void> => {
   const { userId } = req.params;
+  const requesterId = getUserIdFromRequest(req);
+  const requesterRole = (req as any).decoded?.role || (req as any).user?.role;
+
+  // Basic permission check: Only the user themselves or an admin can access full profile
+  if (String(requesterId) !== String(userId) && requesterRole !== 'admin') {
+    res.status(403).json({ message: 'Forbidden: You do not have permission to view this profile' });
+    return;
+  }
 
   try {
     const user = await User.findByPk(userId, {
