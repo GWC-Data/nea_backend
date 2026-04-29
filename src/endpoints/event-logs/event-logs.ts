@@ -1,7 +1,7 @@
 // endpoints/event-logs/event-logs.ts
 
 import { Endpoint, EndpointAuthType, EndpointMethod } from 'node-server-engine';
-import { wasteImageUpload } from 'config/multerConfig';
+import { eventImageUpload, wasteImageUpload } from 'config/multerConfig';
 import {
   getAllEventLogsHandler,
   getEventLogByIdHandler,
@@ -13,8 +13,11 @@ import {
   getUserEventLogsByDateHandler,
   getEventLogsByDateRangeHandler,
   getUserRewardsSummaryHandler,
-  getTimerHandler
+  getTimerHandler,
+  bulkCheckInHandler,
+  bulkCheckOutHandler
 } from './event-logs.handler';
+import { bulkCheckInValidator } from './event-logs.validator';
 
 // ✅ POST - Must be first to avoid conflicts
 // export const createEventLogEndpoint = new Endpoint({
@@ -125,6 +128,26 @@ export const getAllEventLogsEndpoint = new Endpoint({
   validator: {},
 });
 
+
+
+// ✅ Bulk Operations Endpoints
+export const bulkCheckInEventEndpoint = new Endpoint({
+  path: '/bulkCheckInEvent',
+  method: EndpointMethod.POST,
+  handler: bulkCheckInHandler,
+  authType: EndpointAuthType.JWT,
+  validator: bulkCheckInValidator,
+});
+
+export const bulkCheckOutEventEndpoint = new Endpoint({
+  path: '/bulkCheckOutEvent',
+  method: EndpointMethod.PUT,
+  handler: bulkCheckOutHandler,
+  authType: EndpointAuthType.JWT,
+  middleware: [eventImageUpload.single('wasteImage')],
+  validator: {},
+});
+
 // ✅ EXPORT IN PRIORITY ORDER - This ensures routes are matched correctly
 // Specific paths MUST come before generic paths with parameters
 export const orderedEventLogsEndpoints = [
@@ -139,4 +162,6 @@ export const orderedEventLogsEndpoints = [
   updateEventLogEndpoint, // PUT /event-logs/:id
   deleteEventLogEndpoint, // DELETE /event-logs/:id
   getAllEventLogsEndpoint, // GET /event-logs
+  bulkCheckInEventEndpoint, // POST /bulkCheckInEvent
+  bulkCheckOutEventEndpoint // PUT /bulkCheckOutEvent
 ];

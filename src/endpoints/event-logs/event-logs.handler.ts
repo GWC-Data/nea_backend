@@ -6,7 +6,7 @@ import {
   reportError
 } from 'node-server-engine';
 import { Response } from 'express';
-import { EventLogs, User,EventTable } from 'db';
+import { EventLogs, User,EventTable, Organization } from 'db';
 import {
   EVENT_LOG_NOT_FOUND,
   EVENT_LOG_CREATION_ERROR,
@@ -202,7 +202,7 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       return;
     }
 
-    let totalHours = 0;
+    const totalHours = 0;
     // if (hoursEnrolled) {
     //   totalHours = parseHoursEnrolled(hoursEnrolled);
     // }
@@ -874,5 +874,167 @@ export const getUserRewardsSummaryHandler: EndpointHandler<EndpointAuthType.JWT>
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_LOG_GET_ERROR, error });
+  }
+};
+
+
+export const bulkCheckInHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req,
+  res
+): Promise<void> => {
+  const { eventId, checkInTime, hoursEnrolled, users } = req.body;
+  const orgId = getUserIdFromRequest(req); // org ID from JWT
+
+  try {
+    if (!orgId) {
+      res.status(401).json({ message: 'Organization ID not found in token' });
+      return;
+    }
+
+    const event = await EventTable.findByPk(eventId);
+    if (!event) {
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
+    // Optional: verify that the event belongs to this organization (event.createdBy === orgId)
+    if (event.createdBy !== orgId) {
+      res.status(403).json({ message: 'Organization not authorized for this event' });
+      return;
+    }
+
+    // Prevent duplicate open check-ins
+    const existingOpen = await EventLogs.findOne({
+      where: {
+        eventId,
+        userId: { [Op.in]: users },
+        checkOutTime: null
+      }
+    });
+    if (existingOpen) {
+      res.status(409).json({ message: 'One or more users already have an open check‑in for this event' });
+      return;
+    }
+
+    const checkInDate = new Date(checkInTime);
+    const createdLogs = [];
+
+    for (const userId of users) {
+      const log = await EventLogs.create({
+        eventId,
+        userId,
+        checkInTime: checkInDate,
+        hoursEnrolled: String(hoursEnrolled),
+        totalHours: 0,
+        garbageWeight: 0,
+        eventLocation: event.location,
+        groupId: null, // or derive from user's group if needed
+      });
+      createdLogs.push(log);
+    }
+
+    // Optionally update organization's eventIds list if not already present
+    const org = await Organization.findByPk(orgId);
+    if (org && (!org.eventIds || !org.eventIds.includes(eventId))) {
+      await org.update({ eventIds: [...(org.eventIds || []), eventId] });
+    }
+
+    res.status(201).json({
+      message: 'Bulk check‑in successful',
+      checkedInCount: createdLogs.length,
+      eventId
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error during bulk check‑in', error });
+  }
+};
+
+
+// ✅ Bulk Check‑Out Handler
+export const bulkCheckOutHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req,
+  res
+): Promise<void> => {
+  const { checkOutTime, garbageWeight, garbageType, eventLocation, users, eventId } = req.body;
+  const orgId = getUserIdFromRequest(req);
+
+  try {
+    if (!orgId) {
+      res.status(401).json({ message: 'Organization ID not found in token' });
+      return;
+    }
+
+    // Handle uploaded waste image (if any)
+    let wasteImagePath: string | null = null;
+    if (req.file) {
+      wasteImagePath = getRelativeImagePath(req.file.path);
+    }
+
+    let totalHoursSum = 0;
+    let totalWeightSum = 0;
+    let updatedCount = 0;
+    const weight = parseFloat(garbageWeight);
+
+    for (const userId of users) {
+      // Build where clause: open check‑in, optionally filter by eventId
+      const whereClause: any = { userId, checkOutTime: null };
+      if (eventId) whereClause.eventId = eventId;
+
+      const log = await EventLogs.findOne({
+        where: whereClause,
+        order: [['checkInTime', 'DESC']]
+      });
+
+      if (!log) continue; // No active check‑in for this user
+
+      const checkIn = new Date(log.checkInTime);
+      const checkOut = new Date(checkOutTime);
+      if (checkOut < checkIn) {
+        // Skip invalid check‑out (time before check‑in)
+        continue;
+      }
+
+      const sessionHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+      totalHoursSum += sessionHours;
+      totalWeightSum += weight;
+
+      await log.update({
+        checkOutTime: checkOut,
+        totalHours: sessionHours,
+        garbageWeight: weight,
+        garbageType: garbageType || null,
+        eventLocation: eventLocation || log.eventLocation,
+        wasteImage: wasteImagePath || log.wasteImage
+      });
+
+      updatedCount++;
+    }
+
+    // Update organization aggregates (totalHours and totalGarbageWeight)
+    if (totalHoursSum > 0 || totalWeightSum > 0) {
+      const Organization = (await import('db/models/Organization')).Organization;
+      await Organization.increment(
+        {
+          totalHours: totalHoursSum,
+          totalGarbageWeight: totalWeightSum
+        },
+        { where: { orgId } }
+      );
+    }
+
+    res.status(200).json({
+      message: 'Bulk check‑out successful',
+      updatedCount,
+      totalHoursLogged: totalHoursSum.toFixed(2),
+      totalGarbageCollected: totalWeightSum.toFixed(2)
+    });
+  } catch (error) {
+    // Clean up uploaded file if something went wrong
+    if (req.file) {
+      deleteImageFile(req.file.path);
+    }
+    reportError(error);
+    res.status(500).json({ message: 'Error during bulk check‑out', error });
   }
 };
