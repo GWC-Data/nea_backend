@@ -1,5 +1,6 @@
 import { Endpoint, EndpointAuthType, EndpointMethod } from 'node-server-engine';
 import {  updateUserValidator } from './users.validator';
+// import { getFullUserProfileValidator } from './fullProfile.validator';
 
 import {
   getAllUsersHandler,
@@ -11,6 +12,7 @@ import {
   getAllUsersProfileHandler,
   getUserLeaderboardHandler
 } from './users.handler';
+// import { getFullUserProfileHandler } from './fullProfile.handler';
 
 export const createUserEndpoint = new Endpoint({
   path: '/users',
@@ -38,6 +40,14 @@ export const getUserByIdEndpoint = new Endpoint({
   validator: {},
   // middleware: [middleware.checkPermission('GetUser')]
 });
+
+// export const getFullUserProfileEndpoint = new Endpoint({
+//   path: '/users/full-profile/:userId',
+//   method: EndpointMethod.GET,
+//   handler: getFullUserProfileHandler,
+//   authType: EndpointAuthType.JWT,
+//   validator: getFullUserProfileValidator,
+// });
 
 export const updateUserEndpoint = new Endpoint({
   path: '/users',

@@ -231,3 +231,50 @@ export const getEventLogsByDateRangeValidator: Schema = {
         }
     }
 };
+
+
+
+
+
+export const bulkCheckInValidator: Schema = {
+  eventId: {
+    in: 'body',
+    exists: { errorMessage: 'eventId is required' },
+    isUUID: { errorMessage: 'eventId must be a valid UUID' },
+    custom: {
+      options: async (value) => {
+        const event = await EventTable.findByPk(value);
+        if (!event) throw new Error('Event not found');
+        return true;
+      }
+    }
+  },
+  checkInTime: {
+    in: 'body',
+    exists: { errorMessage: 'checkInTime is required' },
+    isISO8601: { errorMessage: 'checkInTime must be a valid ISO 8601 date' }
+  },
+  hoursEnrolled: {
+    in: 'body',
+    exists: { errorMessage: 'hoursEnrolled is required' },
+    isFloat: { options: { min: 0 }, errorMessage: 'hoursEnrolled must be a non-negative number' }
+  },
+  users: {
+    in: 'body',
+    exists: { errorMessage: 'users array is required' },
+    isArray: { options: { min: 1 }, errorMessage: 'users must be a non‑empty array' },
+    custom: {
+      options: async (value) => {
+        if (!Array.isArray(value)) throw new Error('users must be an array');
+        for (const userId of value) {
+          const user = await User.findByPk(userId);
+          if (!user) {
+            // Throw a plain string; it will be used as the error message
+            throw new Error(`User with ID "${userId}" does not exist in the database.`);
+          }
+        }
+        return true;
+      }
+    }
+  }
+};

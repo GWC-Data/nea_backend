@@ -33,7 +33,8 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  const { date, location, name, details, description, rewards } = req.body;
+  // 👇 Accept startDate, endDate, eventType
+  const { startDate, endDate, location, name, details, description, rewards, eventType } = req.body;
   const createdBy = getUserIdFromRequest(req);
 
   try {
@@ -42,17 +43,15 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    if (!date || !location || !name) {
-      res
-        .status(400)
-        .json({ message: 'date, location, and name are required' });
+    if (!startDate || !location || !name) {
+      res.status(400).json({ message: 'startDate, location, and name are required' });
       return;
     }
 
-    const eventDate = new Date(date);
+    const startDateObj = new Date(startDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (eventDate < today) {
+    if (startDateObj < today) {
       res.status(400).json({ message: EVENT_DATE_PAST });
       return;
     }
@@ -63,21 +62,21 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     }
 
     const newEvent = await EventTable.create({
-      date,
+      startDate: startDateObj,
+      endDate: endDate ? new Date(endDate) : null,
       location,
       name,
+      eventType: eventType || 'public',        // 👈 store eventType
+      createdBy,                               // from token, not from body
       details: details || null,
       description: description || null,
       rewards: rewards || null,
       event_image: eventImagePath,
       joinsCount: 0,
       participants: [],
-      createdBy: createdBy
     });
 
-    res
-      .status(200)
-      .json({ message: 'Event created successfully', event: newEvent });
+    res.status(200).json({ message: 'Event created successfully', event: newEvent });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_CREATION_ERROR, error });
@@ -92,7 +91,7 @@ export const getAllEventsHandler: EndpointHandler<
   res: Response
 ): Promise<void> => {
   try {
-    const events = await EventTable.findAll({ order: [['date', 'ASC']] });
+    const events = await EventTable.findAll({ order: [['startDate', 'ASC']] });
     res.status(200).json({ events });
   } catch (error) {
     reportError(error);
@@ -138,18 +137,7 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   res: Response
 ): Promise<void> => {
   const { id } = req.params;
-
-  const {
-    date,
-    location,
-    name,
-    details,
-    description,
-    rewards,
-    participants,
-    joinsCount
-  } = req.body;
-
+  const { startDate, endDate, location, name, details, description, rewards, eventType, participants, joinsCount } = req.body;
   const userId = getUserIdFromRequest(req);
 
   try {
@@ -164,59 +152,42 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    // ✅ Date validation
-    if (date) {
-      const eventDate = new Date(date);
+    if (startDate) {
+      const startDateObj = new Date(startDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-
-      if (eventDate < today) {
+      if (startDateObj < today) {
         res.status(400).json({ message: EVENT_DATE_PAST });
         return;
       }
     }
 
-    // ✅ Prepare update object
     const updateData: any = {};
-
-    if (date !== undefined) updateData.date = date;
+    if (startDate !== undefined) updateData.startDate = new Date(startDate);
+    if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
     if (location !== undefined) updateData.location = location;
     if (name !== undefined) updateData.name = name;
     if (details !== undefined) updateData.details = details;
     if (description !== undefined) updateData.description = description;
     if (rewards !== undefined) updateData.rewards = rewards;
+    if (eventType !== undefined) updateData.eventType = eventType;      // 👈 allow updating eventType
 
-    // ✅ participants
     if (participants !== undefined) {
       try {
-        updateData.participants =
-          typeof participants === 'string'
-            ? JSON.parse(participants)
-            : participants;
+        updateData.participants = typeof participants === 'string' ? JSON.parse(participants) : participants;
       } catch {
         res.status(400).json({ message: 'Invalid participants format' });
         return;
       }
     }
+    if (joinsCount !== undefined) updateData.joinsCount = Number(joinsCount);
 
-    // ✅ joinsCount
-    if (joinsCount !== undefined) {
-      updateData.joinsCount = Number(joinsCount);
-    }
-
-    // ✅ IMAGE UPDATE + DELETE OLD IMAGE
     if ((req as any).file) {
       const newImagePath = getRelativeImagePath((req as any).file.path);
-
-      // 🔥 delete old image
       if (event.event_image) {
         const oldPath = path.join(process.cwd(), event.event_image);
-
-        if (fs.existsSync(oldPath)) {
-          fs.unlinkSync(oldPath);
-        }
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
-
       updateData.event_image = newImagePath;
     }
 
@@ -226,20 +197,12 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     }
 
     await event.update(updateData);
-
-    res.status(200).json({
-      message: 'Event updated successfully',
-      event
-    });
+    res.status(200).json({ message: 'Event updated successfully', event });
   } catch (error) {
     reportError(error);
-    res.status(500).json({
-      message: EVENT_UPDATE_ERROR,
-      error
-    });
+    res.status(500).json({ message: EVENT_UPDATE_ERROR, error });
   }
 };
-
 // ✅ Delete Event
 export const deleteEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
@@ -287,9 +250,9 @@ export const getEventsByDateHandler: EndpointHandler<
 
     const events = await EventTable.findAll({
       where: {
-        date: { [Op.gte]: queryDate, [Op.lt]: nextDate }
+        startDate: { [Op.gte]: queryDate, [Op.lt]: nextDate }
       },
-      order: [['date', 'ASC']]
+      order: [['startDate', 'ASC']]
     });
 
     res.status(200).json({ events });
@@ -310,8 +273,8 @@ export const getUpcomingEventsHandler: EndpointHandler<
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const events = await EventTable.findAll({
-      where: { date: { [Op.gte]: today } },
-      order: [['date', 'ASC']]
+      where: { startDate: { [Op.gte]: today } },
+      order: [['startDate', 'ASC']]
     });
     res.status(200).json({ events });
   } catch (error) {
@@ -549,13 +512,13 @@ export const getUserJoinedEventsHandler: EndpointHandler<
     if (eventIds.length > 0) {
       const events = await EventTable.findAll({
         where: { eventId: eventIds },
-        attributes: ['eventId', 'name', 'location', 'date', 'joinsCount']
+        attributes: ['eventId', 'name', 'location', 'startDate', 'joinsCount']
       });
       joinedEventsWithDetails = events.map((event) => ({
         eventId: event.eventId,
         eventName: event.name,
         location: event.location,
-        eventDate: event.date,
+        eventDate: event.startDate,
         participantsCount: event.joinsCount
       }));
     }
@@ -608,7 +571,7 @@ export const getEventProfileHandler: EndpointHandler<
       eventName: event.name,
       location: event.location,
       joinedCount,
-      eventDate: event.date,
+      eventDate: event.startDate,
       details: event.details,
       description: event.description,
       reward: event.rewards,
@@ -633,7 +596,7 @@ export const getAllEventsProfileHandler: EndpointHandler<
   try {
     const events = await EventTable.findAll({
       include: [{ association: 'eventLogs', attributes: ['id', 'userId'] }],
-      order: [['date', 'DESC']]
+      order: [['startDate', 'DESC']]
     });
 
     const eventsProfile = events.map((event) => ({
@@ -641,7 +604,7 @@ export const getAllEventsProfileHandler: EndpointHandler<
       eventName: event.name,
       location: event.location,
       joinedCount: event.eventLogs?.length || 0,
-      eventDate: event.date,
+      eventDate: event.startDate,
       details: event.details,
       description: event.description,
       reward: event.rewards,
@@ -750,7 +713,7 @@ export const getDashboardHandler: EndpointHandler<
           'eventId',
           'name',
           'location',
-          'date',
+          'startDate',
           'joinsCount',
           'event_image'
         ]
@@ -759,7 +722,7 @@ export const getDashboardHandler: EndpointHandler<
         eventId: event.eventId,
         eventName: event.name,
         location: event.location,
-        eventDate: event.date,
+        eventDate: event.startDate,
         joinedCount: event.joinsCount,
         eventImage: event.event_image || null
       }));
@@ -816,7 +779,7 @@ export const getEventLeaderboardHandler: EndpointHandler<
 
   try {
     const event = await EventTable.findByPk(eventId, {
-      attributes: ['eventId', 'name', 'date', 'location']
+      attributes: ['eventId', 'name', 'startDate', 'location']
     });
     if (!event) {
       res.status(404).json({ message: EVENT_NOT_FOUND });
@@ -883,7 +846,7 @@ export const getEventLeaderboardHandler: EndpointHandler<
         checkInTime: user.checkInTime,
         checkOutTime: user.checkOutTime,
         eventName: event.name,
-        eventDate: event.date,
+        eventDate: event.startDate,
         logEntries: user.logsCount
       }));
 
@@ -892,7 +855,7 @@ export const getEventLeaderboardHandler: EndpointHandler<
       eventDetails: {
         eventId: event.eventId,
         eventName: event.name,
-        eventDate: event.date,
+        eventDate: event.startDate,
         location: event.location,
         totalParticipants: leaderboard.length
       },
