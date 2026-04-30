@@ -1,14 +1,13 @@
-// users/users.handler.ts
-
 import {
   EndpointAuthType,
   EndpointRequestType,
   EndpointHandler,
-  reportError
+  reportError,
+  sequelize
 } from 'node-server-engine';
 import bcrypt from 'bcryptjs';
 import { Response } from 'express';
-import { User } from 'db';
+import { EventLogs, User } from 'db';
 import { Op } from 'sequelize';
 import {
   USER_NOT_FOUND,
@@ -25,6 +24,13 @@ import {
   CO2_PER_KG_WASTE
 } from '../event-logs/event-logs.const';
 
+
+interface AggregatedStats {
+  totalWasteCollected: number | null;
+  totalTimeLogged: number | null;
+  completedActivities: number | null;
+}
+
 // Helper function to get user ID from request (returns UUID string)
 const getUserIdFromRequest = (req: any): string | undefined => {
   return req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id;
@@ -35,7 +41,7 @@ export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req: EndpointRequestType[EndpointAuthType.NONE],
   res: Response
 ): Promise<void> => {
-  const { name, email, password, role, age, gender, groupId } = req.body;
+  const { name, email, password, role, age, gender } = req.body; // removed groupId
 
   try {
     const existingUser = await User.findOne({ where: { email } });
@@ -53,7 +59,7 @@ export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
       role: role || 'user',
       age: age !== undefined ? age : null,
       gender: gender !== undefined ? gender : null,
-      groupId: groupId !== undefined ? groupId : null
+      // orgId defaults to [], joinedEvents defaults to []
     });
 
     const userResponse = newUser.toJSON();
@@ -62,7 +68,7 @@ export const createUserHandler: EndpointHandler<EndpointAuthType.NONE> = async (
     res.status(201).json({
       message: 'User created successfully',
       user: {
-        id: userResponse.id,        // UUID
+        id: userResponse.id,
         name: userResponse.name,
         email: userResponse.email,
         role: userResponse.role
@@ -82,7 +88,6 @@ export const getAllUsersHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   try {
     const users = await User.findAll({
       attributes: { exclude: ['password'] },
-      include: [{ association: 'group', attributes: ['groupId', 'groupName'] }],
       order: [['createdAt', 'DESC']]
     });
 
@@ -93,7 +98,7 @@ export const getAllUsersHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       role: u.role,
       age: u.age,
       gender: u.gender,
-      group: u.group,
+      orgId: u.orgId,           // array of organization IDs
       createdAt: u.createdAt
     }));
 
@@ -118,8 +123,7 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 
   try {
     const user = await User.findByPk(userId, {
-      attributes: { exclude: ['password'] },
-      include: [{ association: 'group', attributes: ['groupId', 'groupName'] }]
+      attributes: { exclude: ['password'] }
     });
 
     if (!user) {
@@ -134,7 +138,7 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       role: user.role,
       age: user.age,
       gender: user.gender,
-      group: user.group,
+      orgId: user.orgId,
       joinedEvents: user.joinedEvents,
       createdAt: user.createdAt
     };
@@ -152,7 +156,7 @@ export const updateUserHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   res: Response
 ): Promise<void> => {
   const userId = getUserIdFromRequest(req);
-  const { name, email, role, age, gender, groupId } = req.body;
+  const { name, email, role, age, gender } = req.body; // removed groupId
 
   if (!userId) {
     res.status(401).json({ message: 'User ID not found in token' });
@@ -180,7 +184,6 @@ export const updateUserHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     if (role !== undefined) updateData.role = role;
     if (age !== undefined) updateData.age = age;
     if (gender !== undefined) updateData.gender = gender;
-    if (groupId !== undefined) updateData.groupId = groupId;
 
     await user.update(updateData);
 
@@ -200,7 +203,8 @@ export const updateUserHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       role: updatedUser.role,
       age: updatedUser.age,
       gender: updatedUser.gender,
-      joinedEvents: updatedUser.joinedEvents
+      joinedEvents: updatedUser.joinedEvents,
+      orgId: updatedUser.orgId
     };
 
     res.status(200).json({ message: 'User updated successfully', user: userResponse });
@@ -237,7 +241,7 @@ export const deleteUserHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   }
 };
 
-// ✅ Update User Password
+// ✅ Update User Password (if needed)
 export const updateUserPasswordHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req,
   res
@@ -288,37 +292,7 @@ export const getUsersByRoleHandler: EndpointHandler<EndpointAuthType.NONE> = asy
   }
 };
 
-// ✅ Get Users by Group
-export const getUsersByGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req,
-  res
-): Promise<void> => {
-  const { groupId } = req.params;
-
-  try {
-    if (groupId && groupId !== 'null') {
-      const users = await User.findAll({
-        where: { groupId: parseInt(groupId, 10) },
-        attributes: { exclude: ['password'] },
-        include: [{ association: 'group', attributes: ['groupId', 'groupName'] }],
-        order: [['name', 'ASC']]
-      });
-      res.status(200).json({ users });
-    } else {
-      const users = await User.findAll({
-        where: { groupId: null },
-        attributes: { exclude: ['password'] },
-        order: [['name', 'ASC']]
-      });
-      res.status(200).json({ users });
-    }
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: USER_GET_ERROR, error });
-  }
-};
-
-// ✅ Get Users by Gender
+// ✅ Get Users by Gender (keep if needed)
 export const getUsersByGenderHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   req,
   res
@@ -338,25 +312,9 @@ export const getUsersByGenderHandler: EndpointHandler<EndpointAuthType.NONE> = a
   }
 };
 
-// ✅ Get Users without Group
-export const getUsersWithoutGroupHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  _req,
-  res
-): Promise<void> => {
-  try {
-    const users = await User.findAll({
-      where: { groupId: null },
-      attributes: { exclude: ['password'] },
-      order: [['name', 'ASC']]
-    });
-    res.status(200).json({ users });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: USER_GET_ERROR, error });
-  }
-};
+// ========== PROFILE & LEADERBOARD ==========
 
-// ✅ Get User Profile
+// ✅ Get User Profile (authenticated user's own profile)
 export const getUserProfileHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
@@ -370,7 +328,7 @@ export const getUserProfileHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
 
   try {
     const user = await User.findByPk(userId, {
-      attributes: ['id', 'name', 'email', 'role', 'createdAt'],
+      attributes: ['id', 'name', 'email', 'role', 'createdAt', 'orgId'],
       include: [
         {
           association: 'eventLogs',
@@ -391,7 +349,10 @@ export const getUserProfileHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
     const totalWasteCollected = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
     const co2Collected = totalWasteCollected * CO2_PER_KG_WASTE;
     const eventsJoined = new Set(eventLogs.map(log => log.eventId)).size;
-    const groupsJoined = new Set(eventLogs.map(log => log.groupId).filter(id => id !== null)).size;
+    
+    // Groups joined: use orgId array length (each org acts as a group)
+    const groupsJoined = (user.orgId as string[])?.length || 0;
+    
     const totalPoints = Math.floor((totalTimeLogged * 60) / 30) * REWARD_POINTS_PER_30_MINS;
 
     let overallBadge = null;
@@ -423,14 +384,14 @@ export const getUserProfileHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
   }
 };
 
-// ✅ Get All Users Profiles
+// ✅ Get All Users Profiles (no auth)
 export const getAllUsersProfileHandler: EndpointHandler<EndpointAuthType.NONE> = async (
   _req: any,
   res: Response
 ): Promise<void> => {
   try {
     const users = await User.findAll({
-      attributes: ['id', 'name', 'email', 'role', 'createdAt'],
+      attributes: ['id', 'name', 'email', 'role', 'createdAt', 'orgId'],
       include: [
         {
           association: 'eventLogs',
@@ -447,7 +408,7 @@ export const getAllUsersProfileHandler: EndpointHandler<EndpointAuthType.NONE> =
       const totalWasteCollected = eventLogs.reduce((sum, log) => sum + (log.garbageWeight || 0), 0);
       const co2Collected = totalWasteCollected * CO2_PER_KG_WASTE;
       const eventsJoined = new Set(eventLogs.map(log => log.eventId)).size;
-      const groupsJoined = new Set(eventLogs.map(log => log.groupId).filter(id => id !== null)).size;
+      const groupsJoined = (user.orgId as string[])?.length || 0;
       const totalPoints = Math.floor((totalTimeLogged * 60) / 30) * REWARD_POINTS_PER_30_MINS;
 
       let overallBadge = null;
@@ -543,5 +504,86 @@ export const getUserLeaderboardHandler: EndpointHandler<EndpointAuthType.NONE> =
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: 'Error fetching leaderboard', error });
+  }
+};
+
+
+
+
+
+
+export const getFullUserProfileHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const { userId } = req.params;
+  const requesterId = getUserIdFromRequest(req);
+  const requesterRole = (req as any).decoded?.role || (req as any).user?.role;
+
+  // Basic permission check: Only the user themselves or an admin can access full profile
+  if (String(requesterId) !== String(userId) && requesterRole !== 'admin') {
+    res.status(403).json({ message: 'Forbidden: You do not have permission to view this profile' });
+    return;
+  }
+
+  try {
+    const user = await User.findByPk(userId, {
+      attributes: { exclude: ['password'] }
+    });
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Aggregate from completed event logs - cast the result to the expected shape
+    const stats = (await EventLogs.findOne({
+      where: { userId, checkOutTime: { [Op.ne]: null } },
+      attributes: [
+        [sequelize.fn('SUM', sequelize.col('garbageWeight')), 'totalWasteCollected'],
+        [sequelize.fn('SUM', sequelize.col('totalHours')), 'totalTimeLogged'],
+        [sequelize.fn('COUNT', sequelize.col('id')), 'completedActivities']
+      ],
+      raw: true
+    })) as unknown as AggregatedStats | null;
+
+    const totalWaste = Number(stats?.totalWasteCollected) || 0;
+    const totalHours = Number(stats?.totalTimeLogged) || 0;
+    const totalPoints = Math.floor((totalHours * 60) / 30) * REWARD_POINTS_PER_30_MINS;
+    const co2Collected = totalWaste * CO2_PER_KG_WASTE;
+
+    const eventsJoined = await EventLogs.count({
+      where: { userId, checkOutTime: { [Op.ne]: null } },
+      distinct: true,
+      col: 'eventId'
+    });
+
+    // groupsJoined = number of organizations the user belongs to
+    const groupsJoined = (user.orgId as string[])?.length || 0;
+
+    let overallBadge: string | null = null;
+    if (totalHours >= BADGE_DIAMOND_HOURS) overallBadge = 'diamond_champion';
+    else if (totalHours >= BADGE_GOLD_HOURS) overallBadge = 'gold';
+    else if (totalHours >= BADGE_SILVER_HOURS) overallBadge = 'silver';
+
+    res.status(200).json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      age: user.age,
+      gender: user.gender,
+      orgId: user.orgId,
+      totalWasteCollected: totalWaste,
+      totalTimeLogged: totalHours,
+      co2Collected,
+      eventsJoined,
+      groupsJoined,
+      totalPoints,
+      overallBadge,
+      completedActivities: Number(stats?.completedActivities) || 0
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error retrieving user profile', error });
   }
 };

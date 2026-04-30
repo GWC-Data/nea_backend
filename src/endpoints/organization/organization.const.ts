@@ -1,0 +1,11 @@
+export const ORGANIZATION_NOT_FOUND = 'Organization not found';
+export const ORGANIZATION_CREATION_ERROR = 'Error creating organization';
+export const ORGANIZATION_UPDATE_ERROR = 'Error updating organization';
+export const ORGANIZATION_DELETION_ERROR = 'Error deleting organization';
+export const ORGANIZATION_GET_ERROR = 'Error fetching organizations';
+export const ORGANIZATION_NAME_EXISTS = 'Organization name already exists';
+export const ORGANIZATION_EMAIL_EXISTS = 'Email already registered for an organization';
+export const INVALID_EMAIL_FORMAT = 'Invalid email format';
+export const MISSING_REQUIRED_FIELDS = 'Missing required fields: orgName, name, email, password, address, phone';
+export const ORGANIZATION_USER_ERROR = 'Error adding user to organization';
+export const ORGANIZATION_DASHBOARD_ERROR = 'Error retrieving dashboard';

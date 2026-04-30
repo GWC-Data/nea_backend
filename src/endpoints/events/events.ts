@@ -92,6 +92,8 @@ export const getEventParticipantsEndpoint = new Endpoint({
   validator: {},
 });
 
+
+
 export const getEventProfileEndpoint = new Endpoint({
   path: '/events/:eventId/profile',
   method: EndpointMethod.GET,

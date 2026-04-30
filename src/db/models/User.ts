@@ -1,5 +1,4 @@
-import { Table, Column, Model, DataType, ForeignKey, BelongsTo, HasMany } from 'sequelize-typescript';
-import { GroupTable } from './GroupTable';
+import { Table, Column, Model, DataType, HasMany } from 'sequelize-typescript';
 import { EventLogs } from './EventLogs';
 import { PasswordReset } from './PasswordReset';
 
@@ -26,15 +25,13 @@ export class User extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   gender!: string | null;
 
-  @ForeignKey(() => GroupTable)
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  groupId!: number | null;
+  // ✅ Matches migration: orgId as JSON array of organization UUIDs
+  @Column({ type: DataType.JSON, allowNull: true, defaultValue: [] })
+  orgId!: string[];
 
-  @BelongsTo(() => GroupTable)
-  group!: GroupTable | null;
-
+  // ✅ Matches migration: joinedEvents as JSON array of event UUIDs
   @Column({ type: DataType.JSON, defaultValue: [] })
-  joinedEvents!: string[]; // array of event UUIDs
+  joinedEvents!: string[];
 
   @HasMany(() => EventLogs, { foreignKey: 'userId' })
   eventLogs!: EventLogs[];
