@@ -28,15 +28,16 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     },
     address: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     phone: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    isApproved: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
+    status: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'pending',
     },
     userIds: {
       type: DataTypes.JSON,
@@ -63,9 +64,6 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
       defaultValue: DataTypes.NOW,
     },
   });
-
-  await queryInterface.addIndex('Organizations', ['email']);
-  await queryInterface.addIndex('Organizations', ['orgName']);
 }
 
 export async function down(queryInterface: QueryInterface): Promise<void> {

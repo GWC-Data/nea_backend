@@ -76,9 +76,7 @@ export const createOrganizationValidator: Schema = {
   },
   address: {
     in: 'body',
-    exists: {
-      errorMessage: 'Address is required',
-    },
+    optional: { options: { nullable: true } },
     isString: {
       errorMessage: 'Address must be a string',
     },

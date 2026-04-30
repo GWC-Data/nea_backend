@@ -46,7 +46,7 @@ export const createOrganizationHandler: EndpointHandler<EndpointAuthType.NONE> =
       return;
     }
 
-    // Hash password
+    // Hash the plain password from frontend before storing
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create new organization
@@ -57,7 +57,7 @@ export const createOrganizationHandler: EndpointHandler<EndpointAuthType.NONE> =
       password: hashedPassword,
       address,
       phone,
-      isApproved: false,
+      status: 'pending',
       userIds: [],
       eventIds: [],
       totalHours: 0,
@@ -121,7 +121,7 @@ export const updateOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = 
   res: Response
 ): Promise<void> => {
   const { orgId } = req.params;
-  const { orgName, name, email, address, phone, isApproved } = req.body;
+  const { orgName, name, email, address, phone, status } = req.body;
 
   try {
     const organization = await Organization.findByPk(orgId);
@@ -157,7 +157,7 @@ export const updateOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = 
       ...(email && { email }),
       ...(address && { address }),
       ...(phone && { phone }),
-      ...(isApproved !== undefined && { isApproved }),
+      ...(status !== undefined && { status }),
     });
 
     const orgResponse = organization.toJSON();
@@ -224,7 +224,7 @@ export const deleteOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = 
 //         email: organization.email,
 //         address: organization.address,
 //         phone: organization.phone,
-//         isApproved: organization.isApproved,
+//         status: organization.status,
 //       },
 //       stats: {
 //         totalUsers: organization.userIds?.length || 0,

@@ -17,14 +17,14 @@ export class Organization extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   password!: string;
 
-  @Column({ type: DataType.STRING, allowNull: false })
-  address!: string;
+  @Column({ type: DataType.STRING, allowNull: true })
+  address?: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
   phone!: string;
 
-  @Column({ type: DataType.BOOLEAN, defaultValue: false })
-  isApproved!: boolean;
+  @Column({ type: DataType.STRING, defaultValue: 'pending', allowNull: false })
+  status!: 'pending' | 'approved' | 'rejected';
 
   @Column({ type: DataType.JSON, defaultValue: [] })
   userIds!: string[];
