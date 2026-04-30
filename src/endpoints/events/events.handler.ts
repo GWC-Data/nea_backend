@@ -512,13 +512,21 @@ export const getUserJoinedEventsHandler: EndpointHandler<
     if (eventIds.length > 0) {
       const events = await EventTable.findAll({
         where: { eventId: eventIds },
-        attributes: ['eventId', 'name', 'location', 'startDate', 'joinsCount']
+        attributes: [
+          'eventId',
+          'name',
+          'location',
+          'startDate',
+          'endDate',
+          'joinsCount'
+        ]
       });
       joinedEventsWithDetails = events.map((event) => ({
         eventId: event.eventId,
         eventName: event.name,
         location: event.location,
-        eventDate: event.startDate,
+        startDate: event.startDate,
+        endDate: event.endDate,
         participantsCount: event.joinsCount
       }));
     }
@@ -571,7 +579,8 @@ export const getEventProfileHandler: EndpointHandler<
       eventName: event.name,
       location: event.location,
       joinedCount,
-      eventDate: event.startDate,
+      startDate: event.startDate,
+      endDate: event.endDate,
       details: event.details,
       description: event.description,
       reward: event.rewards,
@@ -604,7 +613,8 @@ export const getAllEventsProfileHandler: EndpointHandler<
       eventName: event.name,
       location: event.location,
       joinedCount: event.eventLogs?.length || 0,
-      eventDate: event.startDate,
+      startDate: event.startDate,
+      endDate: event.endDate,
       details: event.details,
       description: event.description,
       reward: event.rewards,
@@ -714,6 +724,7 @@ export const getDashboardHandler: EndpointHandler<
           'name',
           'location',
           'startDate',
+          'endDate',
           'joinsCount',
           'event_image'
         ]
@@ -722,7 +733,8 @@ export const getDashboardHandler: EndpointHandler<
         eventId: event.eventId,
         eventName: event.name,
         location: event.location,
-        eventDate: event.startDate,
+        startDate: event.startDate,
+        endDate: event.endDate,
         joinedCount: event.joinsCount,
         eventImage: event.event_image || null
       }));
@@ -779,7 +791,7 @@ export const getEventLeaderboardHandler: EndpointHandler<
 
   try {
     const event = await EventTable.findByPk(eventId, {
-      attributes: ['eventId', 'name', 'startDate', 'location']
+      attributes: ['eventId', 'name', 'startDate', 'endDate', 'location']
     });
     if (!event) {
       res.status(404).json({ message: EVENT_NOT_FOUND });
@@ -846,7 +858,8 @@ export const getEventLeaderboardHandler: EndpointHandler<
         checkInTime: user.checkInTime,
         checkOutTime: user.checkOutTime,
         eventName: event.name,
-        eventDate: event.startDate,
+        startDate: event.startDate,
+        endDate: event.endDate,
         logEntries: user.logsCount
       }));
 
@@ -855,7 +868,8 @@ export const getEventLeaderboardHandler: EndpointHandler<
       eventDetails: {
         eventId: event.eventId,
         eventName: event.name,
-        eventDate: event.startDate,
+        startDate: event.startDate,
+        endDate: event.endDate,
         location: event.location,
         totalParticipants: leaderboard.length
       },
