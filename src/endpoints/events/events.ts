@@ -141,7 +141,7 @@ export const updateEventEndpoint = new Endpoint({
   method: EndpointMethod.PUT,
   handler: updateEventHandler,
   authType: EndpointAuthType.JWT,
-  middleware: [eventImageUpload.single('event_image')],
+  middleware: [eventImageUpload.single('eventImage')],
   validator: {},
 });
 

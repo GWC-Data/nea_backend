@@ -327,7 +327,7 @@ export const getOrganizationDashboardHandler: EndpointHandler<EndpointAuthType.J
     eventStartDate: e.startDate,
     eventEndDate: e.endDate,
     joinedCount: e.joinsCount,
-    eventImage: e.event_image,
+    eventImage: e.eventImage,
   })),
   events: {
     public: publicEvents.map(e => ({
@@ -337,7 +337,7 @@ export const getOrganizationDashboardHandler: EndpointHandler<EndpointAuthType.J
       eventStartDate: e.startDate,
       eventEndDate: e.endDate,
       joinedCount: e.joinsCount,
-      eventImage: e.event_image,
+      eventImage: e.eventImage,
     })),
     private: privateEvents.map(e => ({
       eventId: e.eventId,
@@ -346,7 +346,7 @@ export const getOrganizationDashboardHandler: EndpointHandler<EndpointAuthType.J
       eventStartDate: e.startDate,
       eventEndDate: e.endDate,
       joinedCount: e.joinsCount,
-      eventImage: e.event_image,
+      eventImage: e.eventImage,
     })),
   },
   usersJoined: usersJoined.map(u => ({

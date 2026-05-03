@@ -40,7 +40,7 @@ export class EventTable extends Model {
   participants!: string[];   // array of user UUIDs
 
   @Column({ type: DataType.STRING, allowNull: true })
-  event_image!: string | null;
+  eventImage!: string | null;
 
   @HasMany(() => EventLogs, { foreignKey: 'eventId' })
   eventLogs!: EventLogs[];

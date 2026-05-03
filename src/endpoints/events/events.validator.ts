@@ -3,13 +3,13 @@ import { Schema } from 'express-validator';
 import { Op } from 'sequelize';
 
 export const createEventValidator: Schema = {
-    date: {
+    startDate: {
         in: 'body',
         exists: {
-            errorMessage: 'Date is required',
+            errorMessage: 'Start date is required',
         },
         isDate: {
-            errorMessage: 'Date must be a valid date',
+            errorMessage: 'Start date must be a valid date',
         },
         custom: {
             options: async (value) => {
@@ -18,10 +18,17 @@ export const createEventValidator: Schema = {
                 today.setHours(0, 0, 0, 0);
                 
                 if (eventDate < today) {
-                    throw new Error('Event date cannot be in the past');
+                    throw new Error('Event start date cannot be in the past');
                 }
                 return true;
             }
+        }
+    },
+    endDate: {
+        in: 'body',
+        optional: true,
+        isDate: {
+            errorMessage: 'End date must be a valid date',
         }
     },
     location: {
@@ -70,15 +77,15 @@ export const updateEventValidator: Schema = {
         exists: {
             errorMessage: 'Event id is required'
         },
-        isInt: {
-            errorMessage: 'Event id must be an integer'
+        isUUID: {
+            errorMessage: 'Event id must be a valid UUID'
         }
     },
-    date: {
+    startDate: {
         in: 'body',
         optional: true,
         isDate: {
-            errorMessage: 'Date must be a valid date',
+            errorMessage: 'Start date must be a valid date',
         },
         custom: {
             options: async (value) => {
@@ -88,11 +95,18 @@ export const updateEventValidator: Schema = {
                     today.setHours(0, 0, 0, 0);
                     
                     if (eventDate < today) {
-                        throw new Error('Event date cannot be in the past');
+                        throw new Error('Event start date cannot be in the past');
                     }
                 }
                 return true;
             }
+        }
+    },
+    endDate: {
+        in: 'body',
+        optional: true,
+        isDate: {
+            errorMessage: 'End date must be a valid date',
         }
     },
     location: {
@@ -124,7 +138,7 @@ export const updateEventValidator: Schema = {
                         const event = await EventTable.findOne({ 
                             where: { 
                                 name: value,
-                                eventId: { [Op.ne]: parseInt(eventId) }
+                                eventId: { [Op.ne]: eventId }
                             }, 
                             raw: true 
                         });
@@ -154,8 +168,8 @@ export const getEventValidator: Schema = {
         exists: {
             errorMessage: 'Event id is required'
         },
-        isInt: {
-            errorMessage: 'Event id must be an integer'
+        isUUID: {
+            errorMessage: 'Event id must be a valid UUID'
         }
     }
 };
@@ -166,8 +180,8 @@ export const deleteEventValidator: Schema = {
         exists: {
             errorMessage: 'Event id is required'
         },
-        isInt: {
-            errorMessage: 'Event id must be an integer'
+        isUUID: {
+            errorMessage: 'Event id must be a valid UUID'
         }
     }
 };
