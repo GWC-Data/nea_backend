@@ -71,7 +71,7 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       details: details || null,
       description: description || null,
       rewards: rewards || null,
-      event_image: eventImagePath,
+      eventImage: eventImagePath,
       joinsCount: 0,
       participants: [],
     });
@@ -170,7 +170,7 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     if (details !== undefined) updateData.details = details;
     if (description !== undefined) updateData.description = description;
     if (rewards !== undefined) updateData.rewards = rewards;
-    if (eventType !== undefined) updateData.eventType = eventType;      // 👈 allow updating eventType
+    if (eventType !== undefined) updateData.eventType = eventType || 'public';
 
     if (participants !== undefined) {
       try {
@@ -184,11 +184,11 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 
     if ((req as any).file) {
       const newImagePath = getRelativeImagePath((req as any).file.path);
-      if (event.event_image) {
-        const oldPath = path.join(process.cwd(), event.event_image);
+      if (event.eventImage) {
+        const oldPath = path.join(process.cwd(), event.eventImage);
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
-      updateData.event_image = newImagePath;
+      updateData.eventImage = newImagePath;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -352,7 +352,7 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       participants: updatedParticipants,
       joinsCount: updatedParticipants.length
     };
-    if (eventImagePath) updateData.event_image = eventImagePath;
+    if (eventImagePath) updateData.eventImage = eventImagePath;
     await event.update(updateData);
 
     let joinedEvents: string[] = user.joinedEvents || [];
@@ -726,7 +726,7 @@ export const getDashboardHandler: EndpointHandler<
           'startDate',
           'endDate',
           'joinsCount',
-          'event_image'
+          'eventImage'
         ]
       });
       eventsJoinedWithDetails = fullEvents.map((event) => ({
@@ -736,7 +736,7 @@ export const getDashboardHandler: EndpointHandler<
         startDate: event.startDate,
         endDate: event.endDate,
         joinedCount: event.joinsCount,
-        eventImage: event.event_image || null
+        eventImage: event.eventImage || null
       }));
     }
 
