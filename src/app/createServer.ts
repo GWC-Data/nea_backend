@@ -23,11 +23,15 @@ export function createServer(): Server {
     next: express.NextFunction
   ) => {
     if (req.path.startsWith('/uploads')) {
-      req.url = req.url.replace('/uploads', '');
-      express.static(path.join(process.cwd(), 'uploads'))(req, res, next);
-    } else {
-      next();
+      // Create a copy of the URL to modify
+      // const originalUrl = req.url;
+      req.url = req.url.replace(/^\/uploads/, '');
+      
+      // console.log(`[Static] Serving ${originalUrl} -> ${req.url} from uploads folder`);
+      
+      return express.static(path.join(process.cwd(), 'uploads'))(req, res, next);
     }
+    next();
   };
 
   return new Server({

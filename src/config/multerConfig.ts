@@ -76,7 +76,8 @@ export const eventImageUpload = multer({
 
 // Helper function to get relative path from absolute path
 export const getRelativeImagePath = (absolutePath: string): string => {
-  return path.relative(process.cwd(), absolutePath);
+  const relativePath = path.relative(process.cwd(), absolutePath);
+  return relativePath.replace(/\\/g, '/');
 };
 
 // Helper function to get absolute path from relative path
