@@ -1,9 +1,13 @@
 import { Table, Column, Model, DataType, HasMany } from 'sequelize-typescript';
 import { EventLogs } from './EventLogs';
 
-@Table({ tableName: 'EventTable', timestamps: true })
+@Table({ tableName: 'eventTable', timestamps: true })
 export class EventTable extends Model {
-  @Column({ type: DataType.UUID, defaultValue: DataType.UUIDV4, primaryKey: true })
+  @Column({
+    type: DataType.UUID,
+    defaultValue: DataType.UUIDV4,
+    primaryKey: true
+  })
   declare eventId: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
@@ -16,7 +20,7 @@ export class EventTable extends Model {
   eventType!: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
-  createdBy!: string;   // organization ID (UUID as string)
+  createdBy!: string; // organization ID (UUID as string)
 
   @Column({ type: DataType.DATE, allowNull: false })
   startDate!: Date;
@@ -42,7 +46,10 @@ export class EventTable extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   eventImage!: string | null;
 
-  @Column({ type: DataType.ENUM('pending', 'approved', 'rejected'), defaultValue: 'approved' })
+  @Column({
+    type: DataType.ENUM('pending', 'approved', 'rejected'),
+    defaultValue: 'approved'
+  })
   status!: 'pending' | 'approved' | 'rejected';
 
   @HasMany(() => EventLogs, { foreignKey: 'eventId' })
