@@ -42,6 +42,9 @@ export class EventTable extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   eventImage!: string | null;
 
+  @Column({ type: DataType.ENUM('pending', 'approved', 'rejected'), defaultValue: 'approved' })
+  status!: 'pending' | 'approved' | 'rejected';
+
   @HasMany(() => EventLogs, { foreignKey: 'eventId' })
   eventLogs!: EventLogs[];
 }

@@ -8,4 +8,4 @@ export * from './organization';
 export * from './forgot-password';
 export * from './reset-password';
 export * from './mail';
-
+export * from './event-requests';
