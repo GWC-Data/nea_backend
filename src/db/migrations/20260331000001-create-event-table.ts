@@ -65,9 +65,15 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
       defaultValue: []
     },
 
-    event_image: {
+    eventImage: {
       type: DataTypes.STRING,
       allowNull: true
+    },
+
+    status: {
+      type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+      allowNull: false,
+      defaultValue: 'approved'
     },
 
     createdAt: {
