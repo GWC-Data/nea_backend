@@ -62,7 +62,19 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     }
 
     const userRole = (req as any).decoded?.role || (req as any).user?.role || (req as any).token?.role || 'user';
-    const eventStatus = userRole === 'admin' ? 'approved' : 'pending';
+
+    // ─── EVENT STATUS POLICY ──────────────────────────────────────────────────
+    // CURRENT BEHAVIOUR (May 2026):
+    //   Both 'admin' and 'organization' roles create events with status 'approved'
+    //   immediately — no intermediate review step is needed.
+    //
+    // TO RESTORE THE APPROVAL WORKFLOW IN FUTURE:
+    //   Replace the line below with:
+    //     const eventStatus = userRole === 'admin' ? 'approved' : 'pending';
+    //   This will make organization-created events start as 'pending' and require
+    //   an admin to explicitly approve them before they appear to regular users.
+    // ─────────────────────────────────────────────────────────────────────────
+    const eventStatus = (userRole === 'admin' || userRole === 'organization') ? 'approved' : 'pending';
 
     const newEvent = await EventTable.create({
       startDate: startDateObj,
