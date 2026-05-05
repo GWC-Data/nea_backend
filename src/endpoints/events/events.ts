@@ -16,8 +16,10 @@ import {
   getAllEventsProfileHandler,
   getLeaderboardHandler,
   getDashboardHandler,
-  getEventLeaderboardHandler
+  getEventLeaderboardHandler,
+  updateEventStatusHandler
 } from './events.handler';
+
 import { eventImageUpload } from 'config/multerConfig';
 
 // All endpoints require JWT authentication
@@ -152,6 +154,15 @@ export const deleteEventEndpoint = new Endpoint({
   authType: EndpointAuthType.JWT,
   validator: {},
 });
+
+export const updateEventStatusEndpoint = new Endpoint({
+  path: '/events/:id/status',
+  method: EndpointMethod.PUT,
+  handler: updateEventStatusHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
 
 // Generic path: /events (GET all)
 export const getAllEventsEndpoint = new Endpoint({

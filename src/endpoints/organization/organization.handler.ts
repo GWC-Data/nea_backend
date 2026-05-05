@@ -286,17 +286,17 @@ export const getOrganizationDashboardHandler: EndpointHandler<EndpointAuthType.J
     const joinedEventIds = [...new Set(eventLogs.map(log => log.eventId))];
     const eventsJoined = await EventTable.findAll({
       where: { eventId: joinedEventIds },
-      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'event_image'],
+      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'eventImage'],
     });
 
     // 4. Events created by this organization (public / private)
     const publicEvents = await EventTable.findAll({
       where: { createdBy: orgId, eventType: 'public' },
-      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'event_image'],
+      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'eventImage'],
     });
     const privateEvents = await EventTable.findAll({
       where: { createdBy: orgId, eventType: 'private' },
-      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'event_image'],
+      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'eventImage'],
     });
 
     // 5. Users who have at least one completed log (users joined)

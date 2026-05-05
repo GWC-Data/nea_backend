@@ -61,6 +61,9 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       eventImagePath = getRelativeImagePath((req as any).file.path);
     }
 
+    const userRole = (req as any).decoded?.role || (req as any).user?.role || (req as any).token?.role || 'user';
+    const eventStatus = userRole === 'admin' ? 'approved' : 'pending';
+
     const newEvent = await EventTable.create({
       startDate: startDateObj,
       endDate: endDate ? new Date(endDate) : null,
@@ -74,6 +77,7 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       eventImage: eventImagePath,
       joinsCount: 0,
       participants: [],
+      status: eventStatus,
     });
 
     res.status(200).json({ message: 'Event created successfully', event: newEvent });
@@ -91,7 +95,29 @@ export const getAllEventsHandler: EndpointHandler<
   res: Response
 ): Promise<void> => {
   try {
-    const events = await EventTable.findAll({ order: [['startDate', 'ASC']] });
+    const userRole = (_req as any).decoded?.role || (_req as any).user?.role || (_req as any).token?.role || 'user';
+    const userId = getUserIdFromRequest(_req);
+
+    let whereClause: any = {};
+    if (userRole === 'admin') {
+      // Admin sees all
+    } else if (userRole === 'organization') {
+      // Org sees approved events + their own pending/rejected events
+      whereClause = {
+        [Op.or]: [
+          { status: 'approved' },
+          { createdBy: userId }
+        ]
+      };
+    } else {
+      // Regular user sees only approved events
+      whereClause = { status: 'approved' };
+    }
+
+    const events = await EventTable.findAll({ 
+      where: whereClause,
+      order: [['startDate', 'ASC']] 
+    });
     res.status(200).json({ events });
   } catch (error) {
     reportError(error);
@@ -882,3 +908,34 @@ export const getEventLeaderboardHandler: EndpointHandler<
       .json({ message: 'Error fetching event leaderboard', error });
   }
 };
+
+// ✅ Update Event Status (Admin Only)
+export const updateEventStatusHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const { status } = req.body;
+  if (!['pending', 'approved', 'rejected'].includes(status)) {
+    res.status(400).json({ message: 'Invalid status' });
+    return;
+  }
+
+  try {
+    const event = await EventTable.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: EVENT_NOT_FOUND });
+      return;
+    }
+
+    event.status = status;
+    await event.save();
+
+    res.status(200).json({ message: 'Event status updated successfully', event });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Failed to update event status', error });
+  }
+};
