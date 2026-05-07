@@ -7,7 +7,7 @@ import {
 } from 'node-server-engine';
 import bcrypt from 'bcryptjs';
 import { Response } from 'express';
-import { EventLogs, User } from 'db';
+import { EventLogs, User, Organization } from 'db';
 import { Op } from 'sequelize';
 import {
   USER_NOT_FOUND,
@@ -127,6 +127,30 @@ export const getUserByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     });
 
     if (!user) {
+      // Check if it's an organization
+      const organization = await Organization.findByPk(userId, {
+        attributes: { exclude: ['password'] }
+      });
+      if (organization) {
+        res.status(200).json({
+          user: {
+            id: organization.orgId,
+            orgName: organization.orgName,
+            name: organization.name,
+            email: organization.email,
+            address: organization.address,
+            phone: organization.phone,
+            userIds: organization.userIds,
+            eventIds: organization.eventIds,
+            totalHours: organization.totalHours,
+            totalGarbageWeight: organization.totalGarbageWeight,
+            role: 'organization',
+            createdAt: organization.createdAt
+          }
+        });
+        return;
+      }
+
       res.status(404).json({ message: USER_NOT_FOUND });
       return;
     }

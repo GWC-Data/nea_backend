@@ -91,12 +91,13 @@ export const createOrganizationValidator: Schema = {
     exists: {
       errorMessage: 'Phone number is required',
     },
-    isNumeric: {
-      errorMessage: 'Phone number must be numeric',
+    matches: {
+      options: /^\+?[0-9\s\-]+$/,
+      errorMessage: 'Phone number must be a valid format',
     },
     isLength: {
-      options: { min: 10, max: 15 },
-      errorMessage: 'Phone number must be between 10 and 15 digits',
+      options: { min: 8, max: 20 },
+      errorMessage: 'Phone number must be between 8 and 20 characters',
     },
   },
 };
@@ -134,8 +135,13 @@ export const updateOrganizationValidator: Schema = {
   phone: {
     in: 'body',
     optional: true,
-    isNumeric: {
-      errorMessage: 'Phone number must be numeric',
+    matches: {
+      options: /^\+?[0-9\s\-]+$/,
+      errorMessage: 'Phone number must be a valid format',
+    },
+    isLength: {
+      options: { min: 8, max: 20 },
+      errorMessage: 'Phone number must be between 8 and 20 characters',
     },
   },
 };

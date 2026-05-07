@@ -426,3 +426,47 @@ export const getOrganizationLeaderboardHandler: EndpointHandler<EndpointAuthType
     res.status(500).json({ message: 'Error fetching organization leaderboard', error });
   }
 };
+
+// ✅ Get Organization Details from JWT token
+export const getOrganizationDetailsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const orgId = getUserIdFromRequest(req);
+
+  if (!orgId) {
+    res.status(401).json({ message: 'Organization ID not found in token' });
+    return;
+  }
+
+  try {
+    const organization = await Organization.findByPk(orgId, {
+      attributes: { exclude: ['password'] }
+    });
+
+    if (!organization) {
+      res.status(404).json({ message: 'Organization not found' });
+      return;
+    }
+
+    res.status(200).json({
+      user: {
+        id: organization.orgId,
+        orgName: organization.orgName,
+        name: organization.name,
+        email: organization.email,
+        address: organization.address,
+        phone: organization.phone,
+        userIds: organization.userIds,
+        eventIds: organization.eventIds,
+        totalHours: organization.totalHours,
+        totalGarbageWeight: organization.totalGarbageWeight,
+        role: 'organization',
+        createdAt: organization.createdAt
+      }
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error retrieving organization details', error });
+  }
+};
