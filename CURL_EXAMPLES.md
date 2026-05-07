@@ -108,6 +108,101 @@ curl -X GET http://localhost:8080/users/leaderboard/top \
 
 ---
 
+## ORGANIZATIONS ENDPOINTS
+
+### Create Organization (No Auth Required)
+```bash
+curl -X POST http://localhost:6060/organizations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "orgName": "Green Warriors Club",
+    "name": "Kumar",
+    "email": "kumar@gmail.com",
+    "password": "encryptedPassword123",
+    "address": "123 Green Street, Eco City",
+    "phone": "1234567890"
+  }'
+```
+
+### Get All Organizations (JWT Required)
+```bash
+curl -X GET http://localhost:6060/organizations \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### Get Organization by ID (JWT Required)
+```bash
+curl -X GET http://localhost:6060/organizations/{{orgId}} \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### Update Organization (JWT Required)
+```bash
+curl -X PUT http://localhost:6060/organizations/{{orgId}} \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "orgName": "Updated Org Name",
+    "address": "New Address",
+    "phone": "9876543210"
+  }'
+```
+
+### Delete Organization (JWT Required)
+```bash
+curl -X DELETE http://localhost:6060/organizations/{{orgId}} \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### Get Organization Dashboard (JWT Required - Organization Token)
+```bash
+curl -X GET http://localhost:6060/organization/dashboard \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### Get Organization Details from Token (JWT Required)
+```bash
+curl -X GET http://localhost:6060/organization/details \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+### Add User to Organization (Extract userId from Token - JWT Required)
+```bash
+curl -X POST http://localhost:6060/organization/{{orgId}}/users \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{}'
+```
+**Note**: The authenticated user's ID is automatically extracted from the Bearer Token. The request body is empty `{}`.
+
+**Response Example:**
+```json
+{
+  "message": "User added to organization successfully",
+  "organization": {
+    "orgId": "550e8400-e29b-41d4-a716-446655440000",
+    "orgName": "Green Warriors Club",
+    "name": "Kumar",
+    "email": "kumar@gmail.com",
+    "address": "123 Green Street, Eco City",
+    "phone": "1234567890",
+    "status": "approved",
+    "userIds": ["authenticated-user-uuid"],
+    "eventIds": [],
+    "totalHours": 0,
+    "totalGarbageWeight": 0
+  },
+  "userIds": ["authenticated-user-uuid"]
+}
+```
+
+### Get Organization Leaderboard (Public)
+```bash
+curl -X GET http://localhost:6060/organizations/leaderboard/top?limit=10
+```
+
+---
+
 ## EVENT LOGS ENDPOINTS
 
 ### Create Event Log - Check In (JWT Required - userId from bearer token)
@@ -309,6 +404,68 @@ curl -X GET http://localhost:8080/events/1/profile
 ```bash
 curl -X GET http://localhost:8080/events-profiles
 ```
+
+### Get Event Leaderboard (JWT Required)
+```bash
+curl -X GET http://localhost:8080/events/{{eventId}}/leaderboard \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+---
+
+## EVENT PARTICIPANT TRACKING ENDPOINTS
+
+### Register for Event (Increment registeredParticipant - JWT Required - userId from bearer token)
+```bash
+curl -X POST http://localhost:6060/events/{{eventId}}/register \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{}'
+```
+**Response Example:**
+```json
+{
+  "message": "Successfully registered for event",
+  "success": true,
+  "data": {
+    "eventId": "660e8400-e29b-41d4-a716-446655440001",
+    "eventName": "Park Cleanup Drive",
+    "registeredParticipant": 6,
+    "displayRegisteredParticipant": 5,
+    "attendentParticipant": 0
+  }
+}
+```
+**Note**: 
+- `registeredParticipant` = 6 (includes event creator)
+- `displayRegisteredParticipant` = 5 (displayed to frontend, excludes creator)
+- Prevents duplicate registration
+
+### Record Attendance via QR Scan (Increment attendentParticipant - JWT Required - userId from bearer token)
+```bash
+curl -X POST http://localhost:6060/events/{{eventId}}/attendance \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{}'
+```
+**Response Example:**
+```json
+{
+  "message": "Attendance recorded successfully",
+  "success": true,
+  "data": {
+    "eventId": "660e8400-e29b-41d4-a716-446655440001",
+    "eventName": "Park Cleanup Drive",
+    "registeredParticipant": 6,
+    "displayRegisteredParticipant": 5,
+    "attendentParticipant": 1
+  }
+}
+```
+**Requirements**:
+- User must be registered for event first
+- Prevents duplicate attendance scans
+- Increments `attendentParticipant` counter atomically
 
 ---
 

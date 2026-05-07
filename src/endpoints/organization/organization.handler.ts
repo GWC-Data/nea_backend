@@ -363,30 +363,73 @@ export const getOrganizationDashboardHandler: EndpointHandler<EndpointAuthType.J
   }
 };
 
-// ✅ Add User to Organization
+// ✅ Add User to Organization (Extract userId from Bearer Token)
 export const addUserToOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
   const { orgId } = req.params;
-  const { userId } = req.body;
+  
+  // Extract userId from the Bearer Token (JWT payload)
+  const userId = getUserIdFromRequest(req);
 
   try {
+    if (!userId) {
+      res.status(401).json({ message: 'User ID not found in token' });
+      return;
+    }
+
+    // Verify user exists
+    const user = await User.findByPk(userId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Get organization
     const organization = await Organization.findByPk(orgId);
     if (!organization) {
       res.status(404).json({ message: ORGANIZATION_NOT_FOUND });
       return;
     }
 
-    const userIds = organization.userIds || [];
-    if (!userIds.includes(userId)) {
-      userIds.push(userId);
-      await organization.update({ userIds });
+    // Get current userIds array (ensure it's an array)
+    let userIds: string[] = organization.userIds || [];
+    if (typeof userIds === 'string') {
+      userIds = JSON.parse(userIds);
+    }
+
+    // Prevent duplicate entries
+    if (userIds.includes(userId)) {
+      res.status(400).json({
+        message: 'User is already part of this organization',
+        organization: {
+          ...organization.toJSON(),
+          password: undefined // Remove password from response
+        }
+      });
+      return;
+    }
+
+    // Create a new array with the user ID (ensures Sequelize detects the change)
+    const updatedUserIds = [...userIds, userId];
+    
+    // Update organization using the new array
+    organization.userIds = updatedUserIds;
+    await organization.save();
+    
+    // Reload organization to confirm the update was persisted in DB
+    const updatedOrg = await Organization.findByPk(orgId);
+    
+    const orgResponse = updatedOrg?.toJSON();
+    if (orgResponse) {
+      delete orgResponse.password;
     }
 
     res.status(200).json({
       message: 'User added to organization successfully',
-      organization,
+      organization: orgResponse,
+      userIds: updatedOrg?.userIds || []
     });
   } catch (error) {
     reportError(error);

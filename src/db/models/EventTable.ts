@@ -43,6 +43,12 @@ export class EventTable extends Model {
   @Column({ type: DataType.JSON, defaultValue: [] })
   participants!: string[];   // array of user UUIDs
 
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
+  registeredParticipant!: number;
+
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  attendentParticipant!: number;
+
   @Column({ type: DataType.STRING, allowNull: true })
   eventImage!: string | null;
 
