@@ -89,6 +89,8 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       eventImage: eventImagePath,
       joinsCount: 0,
       participants: [],
+      registeredParticipant: 1,
+      attendentParticipant: 0,
       status: eventStatus,
     });
 
@@ -130,7 +132,15 @@ export const getAllEventsHandler: EndpointHandler<
       where: whereClause,
       order: [['startDate', 'ASC']] 
     });
-    res.status(200).json({ events });
+
+    const eventsWithCalculations = events.map(event => ({
+      ...event.toJSON(),
+      displayRegisteredParticipant: event.registeredParticipant > 0
+        ? event.registeredParticipant - 1
+        : 0
+    }));
+
+    res.status(200).json({ events: eventsWithCalculations });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: EVENT_GET_ERROR, error });
@@ -157,9 +167,16 @@ export const getEventByIdHandler: EndpointHandler<
     if (typeof participants === 'string')
       participants = JSON.parse(participants);
 
+    const displayRegisteredParticipant = event.registeredParticipant > 0
+      ? event.registeredParticipant - 1
+      : 0;
+
     res.status(200).json({
       event,
       eventId: event.eventId,
+      registeredParticipant: event.registeredParticipant,
+      displayRegisteredParticipant,
+      attendentParticipant: event.attendentParticipant,
       participantsCount: event.joinsCount,
       participantIds: participants
     });
@@ -611,6 +628,9 @@ export const getEventProfileHandler: EndpointHandler<
     }
 
     const joinedCount = event.eventLogs?.length || 0;
+    const displayRegisteredParticipant = event.registeredParticipant > 0
+      ? event.registeredParticipant - 1
+      : 0;
 
     const eventProfile = {
       eventId: event.eventId,
@@ -624,7 +644,10 @@ export const getEventProfileHandler: EndpointHandler<
       reward: event.rewards,
       createdAt: event.createdAt,
       updatedAt: event.updatedAt,
-      participants: joinedCount
+      participants: joinedCount,
+      registeredParticipant: event.registeredParticipant,
+      displayRegisteredParticipant,
+      attendentParticipant: event.attendentParticipant
     };
 
     res
@@ -646,18 +669,27 @@ export const getAllEventsProfileHandler: EndpointHandler<
       order: [['startDate', 'DESC']]
     });
 
-    const eventsProfile = events.map((event) => ({
-      eventId: event.eventId,
-      eventName: event.name,
-      location: event.location,
-      joinedCount: event.eventLogs?.length || 0,
-      startDate: event.startDate,
-      endDate: event.endDate,
-      details: event.details,
-      description: event.description,
-      reward: event.rewards,
-      createdAt: event.createdAt
-    }));
+    const eventsProfile = events.map((event) => {
+      const displayRegisteredParticipant = event.registeredParticipant > 0
+        ? event.registeredParticipant - 1
+        : 0;
+
+      return {
+        eventId: event.eventId,
+        eventName: event.name,
+        location: event.location,
+        joinedCount: event.eventLogs?.length || 0,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        details: event.details,
+        description: event.description,
+        reward: event.rewards,
+        createdAt: event.createdAt,
+        registeredParticipant: event.registeredParticipant,
+        displayRegisteredParticipant,
+        attendentParticipant: event.attendentParticipant
+      };
+    });
 
     res.status(200).json({
       message: 'All events profiles retrieved successfully',
@@ -950,4 +982,174 @@ export const updateEventStatusHandler: EndpointHandler<
     reportError(error);
     res.status(500).json({ message: 'Failed to update event status', error });
   }
-};
+};
+
+// ✅ Register for Event (Increment registeredParticipant)
+export const registerEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const userId = getUserIdFromRequest(req);
+
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
+
+  try {
+    const user = await User.findByPk(userId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    const event = await EventTable.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
+    let participants: string[] = event.participants || [];
+    if (typeof participants === 'string')
+      participants = JSON.parse(participants);
+
+    // Prevent duplicate registration
+    if (participants.includes(user.id)) {
+      res.status(400).json({
+        message: 'You have already registered for this event',
+        success: false
+      });
+      return;
+    }
+
+    // Increment registeredParticipant
+    const updatedParticipants = [...participants, user.id];
+    const newRegisteredCount = event.registeredParticipant + 1;
+
+    // Ensure count doesn't go negative
+    if (newRegisteredCount < 0) {
+      res.status(400).json({ message: 'Invalid registration count' });
+      return;
+    }
+
+    await event.update({
+      registeredParticipant: newRegisteredCount,
+      participants: updatedParticipants,
+      joinsCount: updatedParticipants.length
+    });
+
+    // Update user's joinedEvents
+    let joinedEvents: string[] = user.joinedEvents || [];
+    if (typeof joinedEvents === 'string')
+      joinedEvents = JSON.parse(joinedEvents);
+    if (!joinedEvents.includes(event.eventId)) {
+      await user.update({ joinedEvents: [...joinedEvents, event.eventId] });
+    }
+
+    const displayRegisteredParticipant = newRegisteredCount > 0
+      ? newRegisteredCount - 1
+      : 0;
+
+    res.status(200).json({
+      message: 'Successfully registered for event',
+      success: true,
+      data: {
+        eventId: event.eventId,
+        eventName: event.name,
+        registeredParticipant: newRegisteredCount,
+        displayRegisteredParticipant,
+        attendentParticipant: event.attendentParticipant
+      }
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error registering for event', error });
+  }
+};
+
+// ✅ Record Attendance (Increment attendentParticipant via QR scan)
+export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const userId = getUserIdFromRequest(req);
+
+  if (!userId) {
+    res.status(401).json({ message: 'User ID not found in token' });
+    return;
+  }
+
+  try {
+    const user = await User.findByPk(userId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    const event = await EventTable.findByPk(id);
+    if (!event) {
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
+    // Check if user is registered for this event
+    let participants: string[] = event.participants || [];
+    if (typeof participants === 'string')
+      participants = JSON.parse(participants);
+
+    if (!participants.includes(user.id)) {
+      res.status(400).json({
+        message: 'User must register for event before scanning QR',
+        success: false
+      });
+      return;
+    }
+
+    // Check for duplicate attendance scan using EventLogs
+    const existingLog = await EventLogs.findOne({
+      where: { userId, eventId: id }
+    });
+
+    if (existingLog) {
+      res.status(400).json({
+        message: 'You have already scanned QR for this event',
+        success: false
+      });
+      return;
+    }
+
+    // Increment attendentParticipant
+    const newAttendanceCount = event.attendentParticipant + 1;
+
+    // Ensure count doesn't go negative
+    if (newAttendanceCount < 0) {
+      res.status(400).json({ message: 'Invalid attendance count' });
+      return;
+    }
+
+    await event.update({
+      attendentParticipant: newAttendanceCount
+    });
+
+    const displayRegisteredParticipant = event.registeredParticipant > 0
+      ? event.registeredParticipant - 1
+      : 0;
+
+    res.status(200).json({
+      message: 'Attendance recorded successfully',
+      success: true,
+      data: {
+        eventId: event.eventId,
+        eventName: event.name,
+        registeredParticipant: event.registeredParticipant,
+        displayRegisteredParticipant,
+        attendentParticipant: newAttendanceCount
+      }
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error recording attendance', error });
+  }
+};

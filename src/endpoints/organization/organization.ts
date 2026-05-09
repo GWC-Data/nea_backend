@@ -14,6 +14,7 @@ import {
   getOrganizationDashboardHandler,
   addUserToOrganizationHandler,
   getOrganizationLeaderboardHandler,
+  getOrganizationDetailsHandler,
 } from './organization.handler';
 
 // ✅ POST - Create Organization (no auth required for registration)
@@ -39,6 +40,14 @@ export const getOrganizationDashboardEndpoint = new Endpoint({
   path: '/organization/dashboard',
   method: EndpointMethod.GET,
   handler: getOrganizationDashboardHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+export const getOrganizationDetailsEndpoint = new Endpoint({
+  path: '/organization/details',
+  method: EndpointMethod.GET,
+  handler: getOrganizationDetailsHandler,
   authType: EndpointAuthType.JWT,
   validator: {},
 });
