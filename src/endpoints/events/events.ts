@@ -19,7 +19,10 @@ import {
   getEventLeaderboardHandler,
   updateEventStatusHandler,
   registerEventHandler,
-  attendanceEventHandler
+  attendanceEventHandler,
+  startEventHandler,
+  stopEventHandler,
+  getEventStatusHandler
 } from './events.handler';
 
 import { eventImageUpload } from 'config/multerConfig';
@@ -108,6 +111,30 @@ export const attendanceEventEndpoint = new Endpoint({
   path: '/events/:id/attendance',
   method: EndpointMethod.POST,
   handler: attendanceEventHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+export const startEventEndpoint = new Endpoint({
+  path: '/events/:eventId/start',
+  method: EndpointMethod.POST,
+  handler: startEventHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+export const stopEventEndpoint = new Endpoint({
+  path: '/events/:eventId/stop',
+  method: EndpointMethod.POST,
+  handler: stopEventHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
+export const getEventStatusEndpoint = new Endpoint({
+  path: '/events/:eventId/status',
+  method: EndpointMethod.GET,
+  handler: getEventStatusHandler,
   authType: EndpointAuthType.JWT,
   validator: {},
 });

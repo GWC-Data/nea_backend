@@ -66,15 +66,13 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     },
 
     registeredParticipant: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 1
+      type: DataTypes.JSON,
+      defaultValue: []
     },
 
     attendentParticipant: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 0
+      type: DataTypes.JSON,
+      defaultValue: []
     },
 
     eventImage: {

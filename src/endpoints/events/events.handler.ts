@@ -74,7 +74,7 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     //   This will make organization-created events start as 'pending' and require
     //   an admin to explicitly approve them before they appear to regular users.
     // ─────────────────────────────────────────────────────────────────────────
-    const eventStatus = (userRole === 'admin' || userRole === 'organization') ? 'approved' : 'pending';
+    const eventStatus = userRole === 'admin' ? 'approved' : 'pending';
 
     const newEvent = await EventTable.create({
       startDate: startDateObj,
@@ -89,8 +89,8 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       eventImage: eventImagePath,
       joinsCount: 0,
       participants: [],
-      registeredParticipant: 1,
-      attendentParticipant: 0,
+      registeredParticipant: [],
+      attendentParticipant: [],
       status: eventStatus,
     });
 
@@ -133,12 +133,30 @@ export const getAllEventsHandler: EndpointHandler<
       order: [['startDate', 'ASC']] 
     });
 
-    const eventsWithCalculations = events.map(event => ({
-      ...event.toJSON(),
-      displayRegisteredParticipant: event.registeredParticipant > 0
-        ? event.registeredParticipant - 1
-        : 0
-    }));
+    let filteredEvents = events;
+    if (userRole !== 'admin' && userRole !== 'organization') {
+      filteredEvents = events.filter(event => {
+        if (event.eventType === 'private') {
+          let registered = event.registeredParticipant || [];
+          if (typeof registered === 'string') {
+            try { registered = JSON.parse(registered); } catch { registered = []; }
+          }
+          return userId ? registered.includes(userId) : false;
+        }
+        return true;
+      });
+    }
+
+    const eventsWithCalculations = filteredEvents.map(event => {
+      let registered = event.registeredParticipant || [];
+      if (typeof registered === 'string') {
+        try { registered = JSON.parse(registered); } catch { registered = []; }
+      }
+      return {
+        ...event.toJSON(),
+        displayRegisteredParticipant: registered.length
+      };
+    });
 
     res.status(200).json({ events: eventsWithCalculations });
   } catch (error) {
@@ -167,9 +185,11 @@ export const getEventByIdHandler: EndpointHandler<
     if (typeof participants === 'string')
       participants = JSON.parse(participants);
 
-    const displayRegisteredParticipant = event.registeredParticipant > 0
-      ? event.registeredParticipant - 1
-      : 0;
+    let registered = event.registeredParticipant || [];
+    if (typeof registered === 'string') {
+      try { registered = JSON.parse(registered); } catch { registered = []; }
+    }
+    const displayRegisteredParticipant = registered.length;
 
     res.status(200).json({
       event,
@@ -384,28 +404,56 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    let participants: string[] = event.participants || [];
-    if (typeof participants === 'string')
-      participants = JSON.parse(participants);
-
-    // Check if user already joined (by user.id UUID)
-    if (participants.includes(user.id)) {
-      res.status(400).json({
-        message: 'You have already joined this event.',
-        success: false
-      });
-      return;
-    }
-
     let eventImagePath = null;
     if ((req as any).file) {
       eventImagePath = getRelativeImagePath((req as any).file.path);
     }
 
-    const updatedParticipants = [...participants, user.id];
+    let registeredParticipant: string[] = event.registeredParticipant || [];
+    if (typeof registeredParticipant === 'string') {
+      try {
+        registeredParticipant = JSON.parse(registeredParticipant);
+      } catch {
+        registeredParticipant = [];
+      }
+    }
+
+    let attendentParticipant: string[] = event.attendentParticipant || [];
+    if (typeof attendentParticipant === 'string') {
+      try {
+        attendentParticipant = JSON.parse(attendentParticipant);
+      } catch {
+        attendentParticipant = [];
+      }
+    }
+
+    if (event.eventType === 'private') {
+      if (registeredParticipant.includes(user.id)) {
+        res.status(400).json({
+          message: 'You have already joined this event.',
+          success: false
+        });
+        return;
+      }
+      registeredParticipant = [...registeredParticipant, user.id];
+    } else {
+      if (attendentParticipant.includes(user.id)) {
+        res.status(400).json({
+          message: 'You have already joined this event.',
+          success: false
+        });
+        return;
+      }
+      attendentParticipant = [...attendentParticipant, user.id];
+    }
+
+    const activeParticipantsCount = event.eventType === 'private' ? registeredParticipant.length : attendentParticipant.length;
+    const participantIds = event.eventType === 'private' ? registeredParticipant : attendentParticipant;
+
     const updateData: any = {
-      participants: updatedParticipants,
-      joinsCount: updatedParticipants.length
+      joinsCount: activeParticipantsCount,
+      registeredParticipant,
+      attendentParticipant
     };
     if (eventImagePath) updateData.eventImage = eventImagePath;
     await event.update(updateData);
@@ -423,8 +471,8 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       data: {
         eventId: event.eventId,
         eventName: event.name,
-        totalParticipants: updatedParticipants.length,
-        participantIds: updatedParticipants
+        totalParticipants: activeParticipantsCount,
+        participantIds: participantIds
       }
     });
   } catch (error) {
@@ -467,10 +515,33 @@ export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
+    let registeredParticipant: string[] = event.registeredParticipant || [];
+    if (typeof registeredParticipant === 'string') {
+      try {
+        registeredParticipant = JSON.parse(registeredParticipant);
+      } catch {
+        registeredParticipant = [];
+      }
+    }
+
+    let attendentParticipant: string[] = event.attendentParticipant || [];
+    if (typeof attendentParticipant === 'string') {
+      try {
+        attendentParticipant = JSON.parse(attendentParticipant);
+      } catch {
+        attendentParticipant = [];
+      }
+    }
+
+    const updatedRegistered = registeredParticipant.filter((id) => id !== user.id);
+    const updatedAttendent = attendentParticipant.filter((id) => id !== user.id);
+
     const updatedParticipants = participants.filter((id) => id !== user.id);
     await event.update({
       participants: updatedParticipants,
-      joinsCount: updatedParticipants.length
+      joinsCount: updatedParticipants.length,
+      registeredParticipant: updatedRegistered,
+      attendentParticipant: updatedAttendent
     });
 
     let joinedEvents: string[] = user.joinedEvents || [];
@@ -628,9 +699,11 @@ export const getEventProfileHandler: EndpointHandler<
     }
 
     const joinedCount = event.eventLogs?.length || 0;
-    const displayRegisteredParticipant = event.registeredParticipant > 0
-      ? event.registeredParticipant - 1
-      : 0;
+    let registered = event.registeredParticipant || [];
+    if (typeof registered === 'string') {
+      try { registered = JSON.parse(registered); } catch { registered = []; }
+    }
+    const displayRegisteredParticipant = registered.length;
 
     const eventProfile = {
       eventId: event.eventId,
@@ -670,9 +743,11 @@ export const getAllEventsProfileHandler: EndpointHandler<
     });
 
     const eventsProfile = events.map((event) => {
-      const displayRegisteredParticipant = event.registeredParticipant > 0
-        ? event.registeredParticipant - 1
-        : 0;
+      let registered = event.registeredParticipant || [];
+      if (typeof registered === 'string') {
+        try { registered = JSON.parse(registered); } catch { registered = []; }
+      }
+      const displayRegisteredParticipant = registered.length;
 
       return {
         eventId: event.eventId,
@@ -974,10 +1049,33 @@ export const updateEventStatusHandler: EndpointHandler<
       return;
     }
 
-    event.status = status;
-    await event.save();
+    let attendentParticipant: string[] = event.attendentParticipant || [];
+    if (typeof attendentParticipant === 'string') {
+      try {
+        attendentParticipant = JSON.parse(attendentParticipant);
+      } catch {
+        attendentParticipant = [];
+      }
+    }
 
-    res.status(200).json({ message: 'Event status updated successfully', event });
+    if (status === 'approved') {
+      if (event.createdBy && !attendentParticipant.includes(event.createdBy)) {
+        attendentParticipant = [...attendentParticipant, event.createdBy];
+      }
+    }
+
+    await EventTable.update(
+      {
+        status,
+        attendentParticipant
+      },
+      {
+        where: { eventId: id }
+      }
+    );
+
+    const updatedEvent = await EventTable.findByPk(id);
+    res.status(200).json({ message: 'Event status updated successfully', event: updatedEvent });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: 'Failed to update event status', error });
@@ -1023,18 +1121,17 @@ export const registerEventHandler: EndpointHandler<EndpointAuthType.JWT> = async
       return;
     }
 
-    // Increment registeredParticipant
-    const updatedParticipants = [...participants, user.id];
-    const newRegisteredCount = event.registeredParticipant + 1;
-
-    // Ensure count doesn't go negative
-    if (newRegisteredCount < 0) {
-      res.status(400).json({ message: 'Invalid registration count' });
-      return;
+    let registered: string[] = event.registeredParticipant || [];
+    if (typeof registered === 'string') {
+      try { registered = JSON.parse(registered); } catch { registered = []; }
+    }
+    if (!registered.includes(user.id)) {
+      registered = [...registered, user.id];
     }
 
+    const updatedParticipants = [...participants, user.id];
     await event.update({
-      registeredParticipant: newRegisteredCount,
+      registeredParticipant: registered,
       participants: updatedParticipants,
       joinsCount: updatedParticipants.length
     });
@@ -1047,9 +1144,7 @@ export const registerEventHandler: EndpointHandler<EndpointAuthType.JWT> = async
       await user.update({ joinedEvents: [...joinedEvents, event.eventId] });
     }
 
-    const displayRegisteredParticipant = newRegisteredCount > 0
-      ? newRegisteredCount - 1
-      : 0;
+    const displayRegisteredParticipant = registered.length;
 
     res.status(200).json({
       message: 'Successfully registered for event',
@@ -1057,7 +1152,7 @@ export const registerEventHandler: EndpointHandler<EndpointAuthType.JWT> = async
       data: {
         eventId: event.eventId,
         eventName: event.name,
-        registeredParticipant: newRegisteredCount,
+        registeredParticipant: registered,
         displayRegisteredParticipant,
         attendentParticipant: event.attendentParticipant
       }
@@ -1074,10 +1169,10 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
   res: Response
 ): Promise<void> => {
   const { id } = req.params;
-  const userId = getUserIdFromRequest(req);
+  const userId = req.body.userId || getUserIdFromRequest(req);
 
   if (!userId) {
-    res.status(401).json({ message: 'User ID not found in token' });
+    res.status(401).json({ message: 'User ID not found' });
     return;
   }
 
@@ -1120,22 +1215,23 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
       return;
     }
 
-    // Increment attendentParticipant
-    const newAttendanceCount = event.attendentParticipant + 1;
-
-    // Ensure count doesn't go negative
-    if (newAttendanceCount < 0) {
-      res.status(400).json({ message: 'Invalid attendance count' });
-      return;
+    let attendent: string[] = event.attendentParticipant || [];
+    if (typeof attendent === 'string') {
+      try { attendent = JSON.parse(attendent); } catch { attendent = []; }
+    }
+    if (!attendent.includes(user.id)) {
+      attendent = [...attendent, user.id];
     }
 
     await event.update({
-      attendentParticipant: newAttendanceCount
+      attendentParticipant: attendent
     });
 
-    const displayRegisteredParticipant = event.registeredParticipant > 0
-      ? event.registeredParticipant - 1
-      : 0;
+    let registered: string[] = event.registeredParticipant || [];
+    if (typeof registered === 'string') {
+      try { registered = JSON.parse(registered); } catch { registered = []; }
+    }
+    const displayRegisteredParticipant = registered.length;
 
     res.status(200).json({
       message: 'Attendance recorded successfully',
@@ -1145,11 +1241,164 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
         eventName: event.name,
         registeredParticipant: event.registeredParticipant,
         displayRegisteredParticipant,
-        attendentParticipant: newAttendanceCount
+        attendentParticipant: attendent
       }
     });
   } catch (error) {
     reportError(error);
     res.status(500).json({ message: 'Error recording attendance', error });
+  }
+};
+
+// ✅ Start Event (Automatically create check-in logs for attendees)
+export const startEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const { eventId } = req.params;
+  const orgId = getUserIdFromRequest(req);
+
+  try {
+    if (!orgId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const event = await EventTable.findByPk(eventId);
+    if (!event) {
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
+    let attendent: string[] = event.attendentParticipant || [];
+    if (typeof attendent === 'string') {
+      try { attendent = JSON.parse(attendent); } catch { attendent = []; }
+    }
+
+    const activeAttendees = attendent.filter(id => id !== orgId);
+    if (activeAttendees.length === 0) {
+      res.status(400).json({
+        message: 'At least one participant must be scanned before starting the event.',
+        success: false
+      });
+      return;
+    }
+
+    const existingLogs = await EventLogs.findAll({
+      where: { eventId, checkOutTime: null }
+    });
+
+    if (existingLogs.length > 0) {
+      res.status(400).json({
+        message: 'Event is already started and active.',
+        success: false
+      });
+      return;
+    }
+
+    const checkInTime = new Date();
+
+    for (const userId of activeAttendees) {
+      await EventLogs.create({
+        eventId,
+        userId,
+        checkInTime,
+        checkOutTime: null,
+        totalHours: 0,
+        garbageWeight: 0,
+        hoursEnrolled: '0'
+      });
+    }
+
+    res.status(200).json({
+      message: 'Event started successfully',
+      success: true,
+      checkInTime
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error starting event', error });
+  }
+};
+
+// ✅ Stop Event (Bulk checkout, split weight, calculate elapsed hours, and distribute points)
+export const stopEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const { eventId } = req.params;
+  const orgId = getUserIdFromRequest(req);
+  const { totalWeight = 0 } = req.body;
+
+  try {
+    if (!orgId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const event = await EventTable.findByPk(eventId);
+    if (!event) {
+      res.status(404).json({ message: 'Event not found' });
+      return;
+    }
+
+    const activeLogs = await EventLogs.findAll({
+      where: { eventId, checkOutTime: null }
+    });
+
+    if (activeLogs.length === 0) {
+      res.status(400).json({
+        message: 'No active event logs found for this event.',
+        success: false
+      });
+      return;
+    }
+
+    const checkOutTime = new Date();
+    const count = activeLogs.length;
+    const splitWeight = count > 0 ? Number(totalWeight) / count : 0;
+
+    for (const log of activeLogs) {
+      const elapsedMs = checkOutTime.getTime() - new Date(log.checkInTime).getTime();
+      const elapsedHours = Math.max(0.1, parseFloat((elapsedMs / (1000 * 3600)).toFixed(2)));
+
+      await log.update({
+        checkOutTime,
+        totalHours: elapsedHours,
+        garbageWeight: splitWeight
+      });
+    }
+
+    res.status(200).json({
+      message: 'Event stopped successfully and points distributed!',
+      success: true,
+      splitWeight,
+      attendeesCount: count
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error stopping event', error });
+  }
+};
+
+// ✅ Get Event Active Status (Retrieve if started, and retrieve starting checkInTime)
+export const getEventStatusHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: EndpointRequestType[EndpointAuthType.JWT],
+  res: Response
+): Promise<void> => {
+  const { eventId } = req.params;
+
+  try {
+    const activeLog = await EventLogs.findOne({
+      where: { eventId, checkOutTime: null }
+    });
+
+    res.status(200).json({
+      isStarted: !!activeLog,
+      checkInTime: activeLog ? activeLog.checkInTime : null
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error fetching event status', error });
   }
 };
