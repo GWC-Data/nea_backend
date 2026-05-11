@@ -1190,13 +1190,14 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
     }
 
     // Check if user is registered for this event
-    let participants: string[] = event.participants || [];
-    if (typeof participants === 'string')
-      participants = JSON.parse(participants);
+    let registeredParticipant: string[] = event.registeredParticipant || [];
+    if (typeof registeredParticipant === 'string') {
+      try { registeredParticipant = JSON.parse(registeredParticipant); } catch { registeredParticipant = []; }
+    }
 
-    if (!participants.includes(user.id)) {
+    if (!registeredParticipant.includes(user.id)) {
       res.status(400).json({
-        message: 'User must register for event before scanning QR',
+        message: `User (${user.id}) is not registered for this event (${id})`,
         success: false
       });
       return;
@@ -1209,29 +1210,35 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
 
     if (existingLog) {
       res.status(400).json({
-        message: 'You have already scanned QR for this event',
+        message: 'This user has already scanned their QR or started a session for this event',
         success: false
       });
       return;
     }
 
+    // Move from registered to attendent
+    let registered: string[] = event.registeredParticipant || [];
+    if (typeof registered === 'string') {
+      try { registered = JSON.parse(registered); } catch { registered = []; }
+    }
+    
     let attendent: string[] = event.attendentParticipant || [];
     if (typeof attendent === 'string') {
       try { attendent = JSON.parse(attendent); } catch { attendent = []; }
     }
+
+    // Remove from registered if present
+    const updatedRegistered = registered.filter(rid => rid !== user.id);
+    
+    // Add to attendent if not present
     if (!attendent.includes(user.id)) {
       attendent = [...attendent, user.id];
     }
 
     await event.update({
+      registeredParticipant: updatedRegistered,
       attendentParticipant: attendent
     });
-
-    let registered: string[] = event.registeredParticipant || [];
-    if (typeof registered === 'string') {
-      try { registered = JSON.parse(registered); } catch { registered = []; }
-    }
-    const displayRegisteredParticipant = registered.length;
 
     res.status(200).json({
       message: 'Attendance recorded successfully',
@@ -1239,8 +1246,8 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
       data: {
         eventId: event.eventId,
         eventName: event.name,
-        registeredParticipant: event.registeredParticipant,
-        displayRegisteredParticipant,
+        registeredParticipant: updatedRegistered,
+        displayRegisteredParticipant: updatedRegistered.length,
         attendentParticipant: attendent
       }
     });
