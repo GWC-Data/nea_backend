@@ -74,7 +74,9 @@ jobs:
             pm2 restart backend
           else
             echo "Starting backend..."
-            pm2 start dist/index.js --name backend
+
+            # YOUR EXACT COMMAND
+            pm2 start ./dist/index.js --name backend --interpreter ./node_modules/.bin/nodemon --node-args="-r @babel/register -r ./env/config.js" --watch
           fi
 
           pm2 save
@@ -83,4 +85,4 @@ jobs:
           pm2 list
 
           echo "Backend Logs:"
-          pm2 logs backend --lines 20 --nostream
+          pm2 logs backend --lines 500 --nostream
