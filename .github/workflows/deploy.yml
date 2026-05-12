@@ -9,12 +9,28 @@ jobs:
   deploy:
     runs-on: [self-hosted, backend]
 
+    env:
+      HOME: /home/shanmugavel_muthuraj
+      PATH: /usr/local/bin:/usr/bin:/bin:/home/shanmugavel_muthuraj/.npm-global/bin
+
     steps:
+      - name: Fix Folder Permissions
+        run: |
+          sudo mkdir -p /home/shanmugavel_muthuraj/backend
+          sudo chown -R shanmugavel_muthuraj:shanmugavel_muthuraj /home/shanmugavel_muthuraj
+          sudo chmod -R 755 /home/shanmugavel_muthuraj
+
+      - name: Setup SSH for GitHub
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
       - name: Clone or Update Backend
         run: |
           if [ ! -d "/home/shanmugavel_muthuraj/backend/.git" ]; then
             rm -rf /home/shanmugavel_muthuraj/backend
-            git clone https://github.com/GWC-Data/nea_backend /home/shanmugavel_muthuraj/backend
+            git clone git@github.com:GWC-Data/nea_backend.git /home/shanmugavel_muthuraj/backend
           fi
 
           cd /home/shanmugavel_muthuraj/backend
@@ -36,7 +52,7 @@ jobs:
           cd /home/shanmugavel_muthuraj/backend
 
           # Ensure pm2 is available
-          export PATH=$PATH:/usr/bin:/usr/local/bin:/home/shanmugavel_muthuraj/.npm-global/bin
+          export PATH=$PATH:/home/shanmugavel_muthuraj/.npm-global/bin
 
           # Check if backend already running
           pm2 describe backend > /dev/null 2>&1
@@ -47,8 +63,11 @@ jobs:
           else
             echo "Starting backend..."
 
-            # YOUR EXACT COMMAND (fixed for CI: single line)
-            pm2 start ./dist/index.js --name backend --interpreter ./node_modules/.bin/nodemon --node-args="-r @babel/register -r ./env/config.js" --watch
+            pm2 start ./dist/index.js \
+              --name backend \
+              --interpreter ./node_modules/.bin/nodemon \
+              --node-args="-r @babel/register -r ./env/config.js" \
+              --watch
           fi
 
           pm2 save
