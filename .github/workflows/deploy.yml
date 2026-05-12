@@ -16,8 +16,8 @@ jobs:
     steps:
       - name: Fix Folder Permissions
         run: |
-          sudo mkdir -p /home/shanmugavel_muthuraj/backend
-          sudo chown -R shanmugavel_muthuraj:shanmugavel_muthuraj /home/shanmugavel_muthuraj/backend
+          sudo mkdir -p /home/$(whoami)/backend
+          sudo chown -R $(whoami):$(whoami) /home/$(whoami)/backend
 
       - name: Setup SSH for GitHub
         run: |
