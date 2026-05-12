@@ -9,65 +9,78 @@ jobs:
   deploy:
     runs-on: [self-hosted, backend]
 
-    env:
-      HOME: /home/shanmugavel_muthuraj
-      PATH: /usr/local/bin:/usr/bin:/bin:/home/shanmugavel_muthuraj/.npm-global/bin
-
     steps:
+      - name: Get Current User
+        run: echo "USER_NAME=$(whoami)" >> $GITHUB_ENV
+
       - name: Fix Folder Permissions
         run: |
-          sudo mkdir -p /home/$(whoami)/backend
-          sudo chown -R $(whoami):$(whoami) /home/$(whoami)/backend
+          sudo mkdir -p /home/$USER_NAME/backend
+          sudo chown -R $USER_NAME:$USER_NAME /home/$USER_NAME/backend
 
       - name: Setup SSH for GitHub
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          chmod 600 ~/.ssh/id_ed25519
-          chmod 644 ~/.ssh/id_ed25519.pub
+
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            chmod 600 ~/.ssh/id_ed25519
+          fi
+
+          if [ -f ~/.ssh/id_ed25519.pub ]; then
+            chmod 644 ~/.ssh/id_ed25519.pub
+          fi
+
+          touch ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
       - name: Clone or Update Backend
         run: |
-          if [ ! -d "/home/shanmugavel_muthuraj/backend/.git" ]; then
-            rm -rf /home/shanmugavel_muthuraj/backend
-            git clone git@github.com:GWC-Data/nea_backend.git /home/shanmugavel_muthuraj/backend
+          if [ ! -d "/home/$USER_NAME/backend/.git" ]; then
+            rm -rf /home/$USER_NAME/backend
+            git clone git@github.com:GWC-Data/nea_backend.git /home/$USER_NAME/backend
           fi
 
-          cd /home/shanmugavel_muthuraj/backend
+          cd /home/$USER_NAME/backend
           git fetch origin
           git reset --hard origin/main
 
       - name: Install Dependencies
         run: |
-          cd /home/shanmugavel_muthuraj/backend
+          cd /home/$USER_NAME/backend
           npm install
 
       - name: Build Backend
         run: |
-          cd /home/shanmugavel_muthuraj/backend
+          cd /home/$USER_NAME/backend
           npm run build
 
       - name: Restart Backend with PM2
         run: |
-          cd /home/shanmugavel_muthuraj/backend
+          cd /home/$USER_NAME/backend
 
-          export PATH=$PATH:/home/shanmugavel_muthuraj/.npm-global/bin
+          export PATH=$PATH:/home/$USER_NAME/.npm-global/bin
 
-          pm2 describe backend > /dev/null 2>&1
+          echo "Checking PM2..."
+          pm2 -v
 
-          if [ $? -eq 0 ]; then
+          echo "Checking dist folder..."
+          ls -la dist
+
+          if pm2 describe backend > /dev/null 2>&1; then
             echo "Restarting backend..."
             pm2 restart backend
           else
             echo "Starting backend..."
-
-            pm2 start ./dist/index.js \
-              --name backend \
-              --interpreter ./node_modules/.bin/nodemon \
-              --node-args="-r @babel/register -r ./env/config.js" \
-              --watch
+            pm2 start dist/index.js --name backend
           fi
 
           pm2 save
+
+          echo "PM2 Process List:"
+          pm2 list
+
+          echo "Backend Logs:"
+          pm2 logs backend --lines 20 --nostream
