@@ -17,14 +17,16 @@ jobs:
       - name: Fix Folder Permissions
         run: |
           sudo mkdir -p /home/shanmugavel_muthuraj/backend
-          sudo chown -R shanmugavel_muthuraj:shanmugavel_muthuraj /home/shanmugavel_muthuraj
-          sudo chmod -R 755 /home/shanmugavel_muthuraj
+          sudo chown -R shanmugavel_muthuraj:shanmugavel_muthuraj /home/shanmugavel_muthuraj/backend
 
       - name: Setup SSH for GitHub
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+          chmod 600 ~/.ssh/id_ed25519
+          chmod 644 ~/.ssh/id_ed25519.pub
           chmod 644 ~/.ssh/known_hosts
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
 
       - name: Clone or Update Backend
         run: |
@@ -51,10 +53,8 @@ jobs:
         run: |
           cd /home/shanmugavel_muthuraj/backend
 
-          # Ensure pm2 is available
           export PATH=$PATH:/home/shanmugavel_muthuraj/.npm-global/bin
 
-          # Check if backend already running
           pm2 describe backend > /dev/null 2>&1
 
           if [ $? -eq 0 ]; then
