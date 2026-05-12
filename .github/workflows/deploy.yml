@@ -9,13 +9,8 @@ jobs:
   deploy:
     runs-on: [self-hosted, backend]
 
-    env:
-      HOME: /home/$(whoami)
-      PATH: /usr/local/bin:/usr/bin:/bin:/home/$(whoami)/.npm-global/bin
-
     steps:
       - name: Get Current User
-        id: user
         run: echo "USER_NAME=$(whoami)" >> $GITHUB_ENV
 
       - name: Fix Folder Permissions
@@ -68,19 +63,24 @@ jobs:
 
           export PATH=$PATH:/home/$USER_NAME/.npm-global/bin
 
-          pm2 describe backend > /dev/null 2>&1
+          echo "Checking PM2..."
+          pm2 -v
 
-          if [ $? -eq 0 ]; then
+          echo "Checking dist folder..."
+          ls -la dist
+
+          if pm2 describe backend > /dev/null 2>&1; then
             echo "Restarting backend..."
             pm2 restart backend
           else
             echo "Starting backend..."
-
-            pm2 start ./dist/index.js \
-              --name backend \
-              --interpreter ./node_modules/.bin/nodemon \
-              --node-args="-r @babel/register -r ./env/config.js" \
-              --watch
+            pm2 start dist/index.js --name backend
           fi
 
           pm2 save
+
+          echo "PM2 Process List:"
+          pm2 list
+
+          echo "Backend Logs:"
+          pm2 logs backend --lines 20 --nostream
