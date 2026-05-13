@@ -5,7 +5,7 @@ import {
   reportError
 } from 'node-server-engine';
 import { Response } from 'express';
-import { EventTable, User, EventLogs } from 'db';
+import { EventTable, User, EventLogs, Organization } from 'db';
 import {
   EVENT_NOT_FOUND,
   EVENT_CREATION_ERROR,
@@ -147,6 +147,15 @@ export const getAllEventsHandler: EndpointHandler<
       });
     }
 
+    const activeLogs = await EventLogs.findAll({
+      where: {
+        checkOutTime: null
+      },
+      attributes: ['eventId'],
+      group: ['eventId']
+    });
+    const activeEventIds = new Set(activeLogs.map(log => log.eventId));
+
     const eventsWithCalculations = filteredEvents.map(event => {
       let registered = event.registeredParticipant || [];
       if (typeof registered === 'string') {
@@ -154,7 +163,8 @@ export const getAllEventsHandler: EndpointHandler<
       }
       return {
         ...event.toJSON(),
-        displayRegisteredParticipant: registered.length
+        displayRegisteredParticipant: registered.length,
+        isStarted: activeEventIds.has(event.eventId)
       };
     });
 
@@ -1062,6 +1072,17 @@ export const updateEventStatusHandler: EndpointHandler<
       if (event.createdBy && !attendentParticipant.includes(event.createdBy)) {
         attendentParticipant = [...attendentParticipant, event.createdBy];
       }
+
+      const org = await Organization.findByPk(event.createdBy);
+      if (org) {
+        let orgEventIds: string[] = org.eventIds || [];
+        if (typeof orgEventIds === 'string') {
+          try { orgEventIds = JSON.parse(orgEventIds); } catch { orgEventIds = []; }
+        }
+        if (!orgEventIds.includes(event.eventId)) {
+          await org.update({ eventIds: [...orgEventIds, event.eventId] });
+        }
+      }
     }
 
     await EventTable.update(
@@ -1204,17 +1225,17 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
     }
 
     // Check for duplicate attendance scan using EventLogs
-    const existingLog = await EventLogs.findOne({
-      where: { userId, eventId: id }
-    });
+    // const existingLog = await EventLogs.findOne({
+    //   where: { userId, eventId: id }
+    // });
 
-    if (existingLog) {
-      res.status(400).json({
-        message: 'This user has already scanned their QR or started a session for this event',
-        success: false
-      });
-      return;
-    }
+    // if (existingLog) {
+    //   res.status(400).json({
+    //     message: 'This user has already scanned their QR or started a session for this event',
+    //     success: false
+    //   });
+    //   return;
+    // }
 
     // Move from registered to attendent
     let registered: string[] = event.registeredParticipant || [];
@@ -1335,7 +1356,7 @@ export const stopEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 ): Promise<void> => {
   const { eventId } = req.params;
   const orgId = getUserIdFromRequest(req);
-  const { totalWeight = 0 } = req.body;
+  const { totalWeight = 0, location, garbageType } = req.body;
 
   try {
     if (!orgId) {
@@ -1365,14 +1386,30 @@ export const stopEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     const count = activeLogs.length;
     const splitWeight = count > 0 ? Number(totalWeight) / count : 0;
 
+    let eventElapsedHours = 0;
+
     for (const log of activeLogs) {
       const elapsedMs = checkOutTime.getTime() - new Date(log.checkInTime).getTime();
       const elapsedHours = Math.max(0.1, parseFloat((elapsedMs / (1000 * 3600)).toFixed(2)));
 
+      if (eventElapsedHours === 0) {
+        eventElapsedHours = elapsedHours;
+      }
+
       await log.update({
         checkOutTime,
         totalHours: elapsedHours,
-        garbageWeight: splitWeight
+        garbageWeight: splitWeight,
+        garbageType: garbageType || log.garbageType,
+        eventLocation: location || log.eventLocation
+      });
+    }
+
+    const organization = await Organization.findByPk(orgId);
+    if (organization) {
+      await organization.update({
+        totalHours: (organization.totalHours || 0) + eventElapsedHours,
+        totalGarbageWeight: (organization.totalGarbageWeight || 0) + Number(totalWeight)
       });
     }
 

@@ -21,11 +21,15 @@ import { Op } from 'sequelize';
 
 // Helper function to get userId from request
 const getUserIdFromRequest = (req: any): string | undefined => {
-  return req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id;
+  return (
+    req.decoded?.id || req.user?.id || req.token?.id || req.decodedToken?.id
+  );
 };
 
 // ✅ Create Organization
-export const createOrganizationHandler: EndpointHandler<EndpointAuthType.NONE> = async (
+export const createOrganizationHandler: EndpointHandler<
+  EndpointAuthType.NONE
+> = async (
   req: EndpointRequestType[EndpointAuthType.NONE],
   res: Response
 ): Promise<void> => {
@@ -61,7 +65,7 @@ export const createOrganizationHandler: EndpointHandler<EndpointAuthType.NONE> =
       userIds: [],
       eventIds: [],
       totalHours: 0,
-      totalGarbageWeight: 0,
+      totalGarbageWeight: 0
     });
 
     const orgResponse = newOrg.toJSON();
@@ -69,7 +73,7 @@ export const createOrganizationHandler: EndpointHandler<EndpointAuthType.NONE> =
 
     res.status(201).json({
       message: 'Organization created successfully',
-      organization: orgResponse,
+      organization: orgResponse
     });
   } catch (error) {
     reportError(error);
@@ -78,7 +82,9 @@ export const createOrganizationHandler: EndpointHandler<EndpointAuthType.NONE> =
 };
 
 // ✅ Get All Organizations
-export const getAllOrganizationsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getAllOrganizationsHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   _req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -92,7 +98,9 @@ export const getAllOrganizationsHandler: EndpointHandler<EndpointAuthType.JWT> =
 };
 
 // ✅ Get Organization by ID
-export const getOrganizationByIdHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getOrganizationByIdHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -116,7 +124,9 @@ export const getOrganizationByIdHandler: EndpointHandler<EndpointAuthType.JWT> =
 };
 
 // ✅ Update Organization
-export const updateOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const updateOrganizationHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -133,7 +143,7 @@ export const updateOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = 
     // Check if new orgName already exists (excluding current org)
     if (orgName && orgName !== organization.orgName) {
       const existingOrgName = await Organization.findOne({
-        where: { orgName },
+        where: { orgName }
       });
       if (existingOrgName) {
         res.status(400).json({ message: ORGANIZATION_NAME_EXISTS });
@@ -157,7 +167,7 @@ export const updateOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = 
       ...(email && { email }),
       ...(address && { address }),
       ...(phone && { phone }),
-      ...(status !== undefined && { status }),
+      ...(status !== undefined && { status })
     });
 
     const orgResponse = organization.toJSON();
@@ -165,7 +175,7 @@ export const updateOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = 
 
     res.status(200).json({
       message: 'Organization updated successfully',
-      organization: orgResponse,
+      organization: orgResponse
     });
   } catch (error) {
     reportError(error);
@@ -174,7 +184,9 @@ export const updateOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = 
 };
 
 // ✅ Delete Organization
-export const deleteOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const deleteOrganizationHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -241,10 +253,9 @@ export const deleteOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = 
 //   }
 // };
 
-
-
-
-export const getOrganizationDashboardHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getOrganizationDashboardHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -266,95 +277,136 @@ export const getOrganizationDashboardHandler: EndpointHandler<EndpointAuthType.J
     const userIds = organization.userIds || [];
     // const users = await User.findAll({ where: { id: userIds } });
 
-    // 2. Aggregate stats from EventLogs (completed logs)
+    // 2. Get stats directly from the organization table
+    const totalHours = organization.totalHours || 0;
+    const totalMinutesLogged = totalHours * 60;
+    const totalWeight = organization.totalGarbageWeight || 0;
+    const totalPoints = Math.floor(totalMinutesLogged / 30) * 5; // 5 points per 30 min session
+
+    // 2.1 Fetch EventLogs only for calculating joined events and participants
     const eventLogs = await EventLogs.findAll({
-      where: { userId: userIds, checkOutTime: { [Op.ne]: null } },
+      where: { userId: userIds, checkOutTime: { [Op.ne]: null } }
     });
 
-    let totalMinutesLogged = 0;
-    let totalWeight = 0;
-    let totalPoints = 0;
-
-    for (const log of eventLogs) {
-      const hours = log.totalHours || 0;
-      totalMinutesLogged += hours * 60;
-      totalWeight += log.garbageWeight || 0;
-      totalPoints += Math.floor((hours * 60) / 30) * 5; // 5 points per 30 min
-    }
-
     // 3. Events joined by organization members (distinct events)
-    const joinedEventIds = [...new Set(eventLogs.map(log => log.eventId))];
+    const joinedEventIds = [...new Set(eventLogs.map((log) => log.eventId))];
     const eventsJoined = await EventTable.findAll({
       where: { eventId: joinedEventIds },
-      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'eventImage'],
+      attributes: [
+        'eventId',
+        'name',
+        'location',
+        'startDate',
+        'endDate',
+        'joinsCount',
+        'eventImage'
+      ]
     });
 
     // 4. Events created by this organization (public / private)
     const publicEvents = await EventTable.findAll({
       where: { createdBy: orgId, eventType: 'public' },
-      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'eventImage'],
+      attributes: [
+        'eventId',
+        'name',
+        'location',
+        'startDate',
+        'endDate',
+        'joinsCount',
+        'eventImage',
+        'status'
+      ]
     });
     const privateEvents = await EventTable.findAll({
       where: { createdBy: orgId, eventType: 'private' },
-      attributes: ['eventId', 'name', 'location', 'startDate', 'endDate', 'joinsCount', 'eventImage'],
+      attributes: [
+        'eventId',
+        'name',
+        'location',
+        'startDate',
+        'endDate',
+        'joinsCount',
+        'eventImage',
+        'status'
+      ]
     });
 
+    // 5. Check which events are currently "Running" (have active logs)
+    const allOrgEventIds = [
+      ...publicEvents.map((e) => e.eventId),
+      ...privateEvents.map((e) => e.eventId)
+    ];
+    const activeLogs = await EventLogs.findAll({
+      where: {
+        eventId: allOrgEventIds,
+        checkOutTime: null
+      },
+      attributes: ['eventId'],
+      group: ['eventId']
+    });
+    const activeEventIds = new Set(activeLogs.map((log) => log.eventId));
+
     // 5. Users who have at least one completed log (users joined)
-    const userIdsWithLogs = [...new Set(eventLogs.map(log => log.userId))];
+    const userIdsWithLogs = [...new Set(eventLogs.map((log) => log.userId))];
     const usersJoined = await User.findAll({
       where: { id: userIdsWithLogs },
-      attributes: ['id', 'name', 'email'],
+      attributes: ['id', 'name', 'email']
     });
 
     // Build response
     const dashboardData = {
-  message: 'Dashboard retrieved successfully',
-  profile: {
-    orgId: organization.orgId,
-    name: organization.name,
-    email: organization.email,
-    role: 'organization',
-  },
-  stats: {
-    totalPoints,
-    totalMinutesLogged,
-    totalWeight,
-  },
-  eventsJoined: eventsJoined.map(e => ({
-    eventId: e.eventId,
-    eventName: e.name,
-    location: e.location,
-    eventStartDate: e.startDate,
-    eventEndDate: e.endDate,
-    joinedCount: e.joinsCount,
-    eventImage: e.eventImage,
-  })),
-  events: {
-    public: publicEvents.map(e => ({
-      eventId: e.eventId,
-      eventName: e.name,
-      location: e.location,
-      eventStartDate: e.startDate,
-      eventEndDate: e.endDate,
-      joinedCount: e.joinsCount,
-      eventImage: e.eventImage,
-    })),
-    private: privateEvents.map(e => ({
-      eventId: e.eventId,
-      eventName: e.name,
-      location: e.location,
-      eventStartDate: e.startDate,
-      eventEndDate: e.endDate,
-      joinedCount: e.joinsCount,
-      eventImage: e.eventImage,
-    })),
-  },
-  usersJoined: usersJoined.map(u => ({
-    userId: u.id,
-    name: u.name,
-    email: u.email,
-  })),
-};
+      message: 'Dashboard retrieved successfully',
+      profile: {
+        orgId: organization.orgId,
+        name: organization.name,
+        email: organization.email,
+        role: 'organization'
+      },
+      stats: {
+        totalPoints,
+        totalMinutesLogged,
+        totalHours,
+        totalWeight
+      },
+      eventsJoined: eventsJoined.map((e) => ({
+        eventId: e.eventId,
+        eventName: e.name,
+        location: e.location,
+        eventStartDate: e.startDate,
+        eventEndDate: e.endDate,
+        joinedCount: e.joinsCount,
+        eventImage: e.eventImage
+      })),
+      events: {
+        public: publicEvents.map((e) => ({
+          eventId: e.eventId,
+          eventName: e.name,
+          location: e.location,
+          eventStartDate: e.startDate,
+          eventEndDate: e.endDate,
+          joinedCount: e.joinsCount,
+          eventImage: e.eventImage,
+          status: e.status,
+          isStarted: activeEventIds.has(e.eventId)
+        })),
+        private: privateEvents.map((e) => ({
+          eventId: e.eventId,
+          eventName: e.name,
+          location: e.location,
+          eventStartDate: e.startDate,
+          eventEndDate: e.endDate,
+          joinedCount: e.joinsCount,
+          eventImage: e.eventImage,
+          status: e.status,
+          isStarted: activeEventIds.has(e.eventId)
+        }))
+      },
+      usersJoined: usersJoined.map((u) => ({
+        userId: u.id,
+        name: u.name,
+        email: u.email
+      }))
+    };
 
     res.status(200).json(dashboardData);
   } catch (error) {
@@ -364,12 +416,14 @@ export const getOrganizationDashboardHandler: EndpointHandler<EndpointAuthType.J
 };
 
 // ✅ Add User to Organization (Extract userId from Bearer Token)
-export const addUserToOrganizationHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const addUserToOrganizationHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
   const { orgId } = req.params;
-  
+
   // Extract userId from the Bearer Token (JWT payload)
   const userId = getUserIdFromRequest(req);
 
@@ -413,14 +467,14 @@ export const addUserToOrganizationHandler: EndpointHandler<EndpointAuthType.JWT>
 
     // Create a new array with the user ID (ensures Sequelize detects the change)
     const updatedUserIds = [...userIds, userId];
-    
+
     // Update organization using the new array
     organization.userIds = updatedUserIds;
     await organization.save();
-    
+
     // Reload organization to confirm the update was persisted in DB
     const updatedOrg = await Organization.findByPk(orgId);
-    
+
     const orgResponse = updatedOrg?.toJSON();
     if (orgResponse) {
       delete orgResponse.password;
@@ -438,27 +492,39 @@ export const addUserToOrganizationHandler: EndpointHandler<EndpointAuthType.JWT>
 };
 
 // ✅ Get Organization Leaderboard
-export const getOrganizationLeaderboardHandler: EndpointHandler<EndpointAuthType.NONE> = async (
-  req: any,
-  res: Response
-): Promise<void> => {
+export const getOrganizationLeaderboardHandler: EndpointHandler<
+  EndpointAuthType.NONE
+> = async (req: any, res: Response): Promise<void> => {
   try {
     const { limit = 5 } = req.query;
-    
+
     const organizations = await Organization.findAll({
-      attributes: ['orgId', 'orgName', 'totalHours', 'totalGarbageWeight', 'userIds'],
+      attributes: [
+        'orgId',
+        'orgName',
+        'totalHours',
+        'totalGarbageWeight',
+        'userIds'
+      ],
       order: [['totalHours', 'DESC']],
       limit: parseInt(limit as string, 10) || 5
     });
 
-    const leaderboard = organizations.map((org, index) => ({
-      rank: index + 1,
-      orgId: org.orgId,
-      orgName: org.orgName,
-      totalHours: org.totalHours || 0,
-      totalGarbageWeight: org.totalGarbageWeight || 0,
-      memberCount: (org.userIds as string[])?.length || 0
-    }));
+    const leaderboard = organizations.map((org, index) => {
+      const totalHours = org.totalHours || 0;
+      const totalMinutesLogged = totalHours * 60;
+      const totalPoints = Math.floor(totalMinutesLogged / 30) * 5;
+
+      return {
+        rank: index + 1,
+        orgId: org.orgId,
+        orgName: org.orgName,
+        totalHours: totalHours,
+        totalGarbageWeight: org.totalGarbageWeight || 0,
+        memberCount: (org.userIds as string[])?.length || 0,
+        totalPoints: totalPoints
+      };
+    });
 
     res.status(200).json({
       message: 'Organization leaderboard retrieved successfully',
@@ -466,12 +532,16 @@ export const getOrganizationLeaderboardHandler: EndpointHandler<EndpointAuthType
     });
   } catch (error) {
     reportError(error);
-    res.status(500).json({ message: 'Error fetching organization leaderboard', error });
+    res
+      .status(500)
+      .json({ message: 'Error fetching organization leaderboard', error });
   }
 };
 
 // ✅ Get Organization Details from JWT token
-export const getOrganizationDetailsHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+export const getOrganizationDetailsHandler: EndpointHandler<
+  EndpointAuthType.JWT
+> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
@@ -510,6 +580,8 @@ export const getOrganizationDetailsHandler: EndpointHandler<EndpointAuthType.JWT
     });
   } catch (error) {
     reportError(error);
-    res.status(500).json({ message: 'Error retrieving organization details', error });
+    res
+      .status(500)
+      .json({ message: 'Error retrieving organization details', error });
   }
 };
