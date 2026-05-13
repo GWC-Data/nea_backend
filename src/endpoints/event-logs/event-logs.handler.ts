@@ -312,7 +312,7 @@ export const getAllEventLogsHandler: EndpointHandler<EndpointAuthType.JWT> = asy
   try {
     const eventLogs = await EventLogs.findAll({
       include: [
-        { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+        { association: 'event', attributes: ['eventId', 'name', 'location', 'startDate'] },
         { association: 'user', attributes: ['id', 'name', 'email'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ],
@@ -336,7 +336,7 @@ export const getEventLogByIdHandler: EndpointHandler<EndpointAuthType.JWT> = asy
   try {
     const eventLog = await EventLogs.findByPk(id, {
       include: [
-        { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+        { association: 'event', attributes: ['eventId', 'name', 'location', 'startDate'] },
         { association: 'user', attributes: ['id', 'name', 'email', 'role'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ]
@@ -574,7 +574,7 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       
       const updatedEventLog = await EventLogs.findByPk(id, {
         include: [
-          { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+          { association: 'event', attributes: ['eventId', 'name', 'location', 'startDate'] },
           { association: 'user', attributes: ['id', 'name', 'email'] },
           { association: 'group', attributes: ['groupId', 'groupName'] }
         ]
@@ -635,7 +635,7 @@ export const getEventLogsByUserHandler: EndpointHandler<EndpointAuthType.JWT> = 
     const eventLogs = await EventLogs.findAll({
       where: { userId },
       include: [
-        { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+        { association: 'event', attributes: ['eventId', 'name', 'location', 'startDate'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ],
       order: [['checkInTime', 'DESC']]
@@ -744,7 +744,7 @@ export const getUserEventLogsByDateHandler: EndpointHandler<EndpointAuthType.JWT
         }
       },
       include: [
-        { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] }
+        { association: 'event', attributes: ['eventId', 'name', 'location', 'startDate'] }
       ],
       order: [['checkInTime', 'ASC']]
     });
@@ -788,7 +788,7 @@ export const getEventLogsByDateRangeHandler: EndpointHandler<EndpointAuthType.JW
         }
       },
       include: [
-        { association: 'event', attributes: ['eventId', 'name', 'location', 'date'] },
+        { association: 'event', attributes: ['eventId', 'name', 'location', 'startDate'] },
         { association: 'user', attributes: ['id', 'name', 'email'] },
         { association: 'group', attributes: ['groupId', 'groupName'] }
       ],
