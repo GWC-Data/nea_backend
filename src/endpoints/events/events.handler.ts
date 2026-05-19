@@ -255,16 +255,6 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    if (startDate) {
-      const startDateObj = new Date(startDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (startDateObj < today) {
-        res.status(400).json({ message: EVENT_DATE_PAST });
-        return;
-      }
-    }
-
     const updateData: any = {};
     if (startDate !== undefined) updateData.startDate = new Date(startDate);
     if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
