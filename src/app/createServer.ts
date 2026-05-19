@@ -22,10 +22,12 @@ export function createServer(): Server {
     res: express.Response,
     next: express.NextFunction
   ) => {
-    if (req.path.startsWith('/uploads')) {
+    const isUploads = req.path.startsWith('/uploads');
+    const isApiUploads = req.path.startsWith('/api/uploads');
+    if (isUploads || isApiUploads) {
       // Create a copy of the URL to modify
       // const originalUrl = req.url;
-      req.url = req.url.replace(/^\/uploads/, '');
+      req.url = req.url.replace(/^\/(api\/)?uploads/, '');
       
       // console.log(`[Static] Serving ${originalUrl} -> ${req.url} from uploads folder`);
       

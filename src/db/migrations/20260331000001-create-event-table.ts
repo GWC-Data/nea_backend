@@ -60,6 +60,11 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
       defaultValue: 0
     },
 
+    participantLimit: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+
     participants: {
       type: DataTypes.JSON,
       defaultValue: []
