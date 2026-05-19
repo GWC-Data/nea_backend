@@ -68,6 +68,15 @@ export const createEventValidator: Schema = {
                 return true;
             }
         }
+    },
+    userCount: {
+        in: 'body',
+        optional: true,
+        isInt: {
+            errorMessage: 'Participant limit must be an integer',
+            options: { min: 1 }
+        },
+        toInt: true
     }
 };
 
@@ -159,6 +168,15 @@ export const updateEventValidator: Schema = {
                 return true;
             }
         }
+    },
+    userCount: {
+        in: 'body',
+        optional: true,
+        isInt: {
+            errorMessage: 'Participant limit must be an integer',
+            options: { min: 1 }
+        },
+        toInt: true
     }
 };
 
