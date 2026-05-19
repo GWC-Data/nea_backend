@@ -34,7 +34,7 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   res: Response
 ): Promise<void> => {
   // 👇 Accept startDate, endDate, eventType
-  const { startDate, endDate, location, name, details, description, rewards, eventType } = req.body;
+  const { startDate, endDate, location, name, details, description, rewards, eventType, status, userCount } = req.body;
   const createdBy = getUserIdFromRequest(req);
 
   try {
@@ -74,7 +74,7 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     //   This will make organization-created events start as 'pending' and require
     //   an admin to explicitly approve them before they appear to regular users.
     // ─────────────────────────────────────────────────────────────────────────
-    const eventStatus = userRole === 'admin' ? 'approved' : 'pending';
+    const eventStatus = status || (userRole === 'admin' ? 'approved' : 'pending');
 
     const newEvent = await EventTable.create({
       startDate: startDateObj,
@@ -86,6 +86,7 @@ export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       details: details || null,
       description: description || null,
       rewards: rewards || null,
+      participantLimit: userCount ? parseInt(userCount, 10) : null,
       eventImage: eventImagePath,
       joinsCount: 0,
       participants: [],
@@ -201,6 +202,21 @@ export const getEventByIdHandler: EndpointHandler<
     }
     const displayRegisteredParticipant = registered.length;
 
+    const userId = getUserIdFromRequest(req);
+    let userPoints = 0;
+    let hasCompleted = false;
+
+    if (userId) {
+      const log = await EventLogs.findOne({
+        where: { eventId: id, userId, checkOutTime: { [Op.ne]: null } }
+      });
+      if (log) {
+        const totalMinutes = (log.totalHours || 0) * 60;
+        userPoints = Math.floor(totalMinutes / 30) * 5;
+        hasCompleted = true;
+      }
+    }
+
     res.status(200).json({
       event,
       eventId: event.eventId,
@@ -208,7 +224,9 @@ export const getEventByIdHandler: EndpointHandler<
       displayRegisteredParticipant,
       attendentParticipant: event.attendentParticipant,
       participantsCount: event.joinsCount,
-      participantIds: participants
+      participantIds: participants,
+      userPoints,
+      hasCompleted
     });
   } catch (error) {
     reportError(error);
@@ -222,7 +240,7 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   res: Response
 ): Promise<void> => {
   const { id } = req.params;
-  const { startDate, endDate, location, name, details, description, rewards, eventType, participants, joinsCount } = req.body;
+  const { startDate, endDate, location, name, details, description, rewards, eventType, participants, joinsCount, status, userCount } = req.body;
   const userId = getUserIdFromRequest(req);
 
   try {
@@ -255,7 +273,9 @@ export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     if (details !== undefined) updateData.details = details;
     if (description !== undefined) updateData.description = description;
     if (rewards !== undefined) updateData.rewards = rewards;
+    if (status !== undefined) updateData.status = status;
     if (eventType !== undefined) updateData.eventType = eventType || 'public';
+    if (userCount !== undefined) updateData.participantLimit = userCount ? parseInt(userCount, 10) : null;
 
     if (participants !== undefined) {
       try {
@@ -1375,9 +1395,13 @@ export const stopEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     });
 
     if (activeLogs.length === 0) {
-      res.status(400).json({
-        message: 'No active event logs found for this event.',
-        success: false
+      // Everyone already checked out, or nobody checked in.
+      // The event is stopped, but no active logs to process.
+      res.status(200).json({
+        message: 'Event stopped successfully. No active check-ins found.',
+        success: true,
+        splitWeight: 0,
+        attendeesCount: 0
       });
       return;
     }

@@ -40,6 +40,9 @@ export class EventTable extends Model {
   @Column({ type: DataType.INTEGER, defaultValue: 0 })
   joinsCount!: number;
 
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  participantLimit!: number | null;
+
   @Column({ type: DataType.JSON, defaultValue: [] })
   participants!: string[];   // array of user UUIDs
 
