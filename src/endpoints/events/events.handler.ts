@@ -146,6 +146,14 @@ export const getAllEventsHandler: EndpointHandler<
           }
           return true;
         });
+      } else if (userRole === 'organization') {
+        // Filter out private events created by other organizations to protect organization privacy
+        filteredEvents = events.filter(event => {
+          if (event.eventType === 'private') {
+            return event.createdBy === userId;
+          }
+          return true;
+        });
       }
 
       const activeLogs = await EventLogs.findAll({
