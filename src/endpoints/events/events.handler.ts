@@ -109,72 +109,80 @@ export const getAllEventsHandler: EndpointHandler<
   _req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  try {
-    const userRole = (_req as any).decoded?.role || (_req as any).user?.role || (_req as any).token?.role || 'user';
-    const userId = getUserIdFromRequest(_req);
+    try {
+      const userRole = (_req as any).decoded?.role || (_req as any).user?.role || (_req as any).token?.role || 'user';
+      const userId = getUserIdFromRequest(_req);
 
-    let whereClause: any = {};
-    if (userRole === 'admin') {
-      // Admin sees all
-    } else if (userRole === 'organization') {
-      // Org sees approved events + their own pending/rejected events
-      whereClause = {
-        [Op.or]: [
-          { status: 'approved' },
-          { createdBy: userId }
-        ]
-      };
-    } else {
-      // Regular user sees only approved events
-      whereClause = { status: 'approved' };
-    }
-
-    const events = await EventTable.findAll({ 
-      where: whereClause,
-      order: [['startDate', 'ASC']] 
-    });
-
-    let filteredEvents = events;
-    if (userRole !== 'admin' && userRole !== 'organization') {
-      filteredEvents = events.filter(event => {
-        if (event.eventType === 'private') {
-          let registered = event.registeredParticipant || [];
-          if (typeof registered === 'string') {
-            try { registered = JSON.parse(registered); } catch { registered = []; }
-          }
-          return userId ? registered.includes(userId) : false;
-        }
-        return true;
-      });
-    }
-
-    const activeLogs = await EventLogs.findAll({
-      where: {
-        checkOutTime: null
-      },
-      attributes: ['eventId'],
-      group: ['eventId']
-    });
-    const activeEventIds = new Set(activeLogs.map(log => log.eventId));
-
-    const eventsWithCalculations = filteredEvents.map(event => {
-      let registered = event.registeredParticipant || [];
-      if (typeof registered === 'string') {
-        try { registered = JSON.parse(registered); } catch { registered = []; }
+      let whereClause: any = {};
+      if (userRole === 'admin') {
+        // Admin sees all
+      } else if (userRole === 'organization') {
+        // Org sees approved events + their own pending/rejected events
+        whereClause = {
+          [Op.or]: [
+            { status: 'approved' },
+            { createdBy: userId }
+          ]
+        };
+      } else {
+        // Regular user sees only approved events
+        whereClause = { status: 'approved' };
       }
-      return {
-        ...event.toJSON(),
-        displayRegisteredParticipant: registered.length,
-        isStarted: activeEventIds.has(event.eventId)
-      };
-    });
 
-    res.status(200).json({ events: eventsWithCalculations });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: EVENT_GET_ERROR, error });
-  }
-};
+      const events = await EventTable.findAll({
+        where: whereClause,
+        order: [['startDate', 'ASC']]
+      });
+
+      let filteredEvents = events;
+      if (userRole !== 'admin' && userRole !== 'organization') {
+        filteredEvents = events.filter(event => {
+          if (event.eventType === 'private') {
+            let registered = event.registeredParticipant || [];
+            if (typeof registered === 'string') {
+              try { registered = JSON.parse(registered); } catch { registered = []; }
+            }
+            return userId ? registered.includes(userId) : false;
+          }
+          return true;
+        });
+      } else if (userRole === 'organization') {
+        // Filter out private events created by other organizations to protect organization privacy
+        filteredEvents = events.filter(event => {
+          if (event.eventType === 'private') {
+            return event.createdBy === userId;
+          }
+          return true;
+        });
+      }
+
+      const activeLogs = await EventLogs.findAll({
+        where: {
+          checkOutTime: null
+        },
+        attributes: ['eventId'],
+        group: ['eventId']
+      });
+      const activeEventIds = new Set(activeLogs.map(log => log.eventId));
+
+      const eventsWithCalculations = filteredEvents.map(event => {
+        let registered = event.registeredParticipant || [];
+        if (typeof registered === 'string') {
+          try { registered = JSON.parse(registered); } catch { registered = []; }
+        }
+        return {
+          ...event.toJSON(),
+          displayRegisteredParticipant: registered.length,
+          isStarted: activeEventIds.has(event.eventId)
+        };
+      });
+
+      res.status(200).json({ events: eventsWithCalculations });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: EVENT_GET_ERROR, error });
+    }
+  };
 
 // ✅ Get Event By ID (UUID)
 export const getEventByIdHandler: EndpointHandler<
@@ -183,56 +191,56 @@ export const getEventByIdHandler: EndpointHandler<
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  const { id } = req.params;
+    const { id } = req.params;
 
-  try {
-    const event = await EventTable.findByPk(id);
-    if (!event) {
-      res.status(404).json({ message: EVENT_NOT_FOUND });
-      return;
-    }
-
-    let participants = event.participants;
-    if (typeof participants === 'string')
-      participants = JSON.parse(participants);
-
-    let registered = event.registeredParticipant || [];
-    if (typeof registered === 'string') {
-      try { registered = JSON.parse(registered); } catch { registered = []; }
-    }
-    const displayRegisteredParticipant = registered.length;
-
-    const userId = getUserIdFromRequest(req);
-    let userPoints = 0;
-    let hasCompleted = false;
-
-    if (userId) {
-      const log = await EventLogs.findOne({
-        where: { eventId: id, userId, checkOutTime: { [Op.ne]: null } }
-      });
-      if (log) {
-        const totalMinutes = (log.totalHours || 0) * 60;
-        userPoints = Math.floor(totalMinutes / 30) * 5;
-        hasCompleted = true;
+    try {
+      const event = await EventTable.findByPk(id);
+      if (!event) {
+        res.status(404).json({ message: EVENT_NOT_FOUND });
+        return;
       }
-    }
 
-    res.status(200).json({
-      event,
-      eventId: event.eventId,
-      registeredParticipant: event.registeredParticipant,
-      displayRegisteredParticipant,
-      attendentParticipant: event.attendentParticipant,
-      participantsCount: event.joinsCount,
-      participantIds: participants,
-      userPoints,
-      hasCompleted
-    });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: EVENT_GET_ERROR });
-  }
-};
+      let participants = event.participants;
+      if (typeof participants === 'string')
+        participants = JSON.parse(participants);
+
+      let registered = event.registeredParticipant || [];
+      if (typeof registered === 'string') {
+        try { registered = JSON.parse(registered); } catch { registered = []; }
+      }
+      const displayRegisteredParticipant = registered.length;
+
+      const userId = getUserIdFromRequest(req);
+      let userPoints = 0;
+      let hasCompleted = false;
+
+      if (userId) {
+        const log = await EventLogs.findOne({
+          where: { eventId: id, userId, checkOutTime: { [Op.ne]: null } }
+        });
+        if (log) {
+          const totalMinutes = (log.totalHours || 0) * 60;
+          userPoints = Math.floor(totalMinutes / 30) * 5;
+          hasCompleted = true;
+        }
+      }
+
+      res.status(200).json({
+        event,
+        eventId: event.eventId,
+        registeredParticipant: event.registeredParticipant,
+        displayRegisteredParticipant,
+        attendentParticipant: event.attendentParticipant,
+        participantsCount: event.joinsCount,
+        participantIds: participants,
+        userPoints,
+        hasCompleted
+      });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: EVENT_GET_ERROR });
+    }
+  };
 
 // ✅ Update Event
 export const updateEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
@@ -335,27 +343,27 @@ export const getEventsByDateHandler: EndpointHandler<
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  const { date } = req.params;
+    const { date } = req.params;
 
-  try {
-    const queryDate = new Date(date);
-    queryDate.setHours(0, 0, 0, 0);
-    const nextDate = new Date(queryDate);
-    nextDate.setDate(nextDate.getDate() + 1);
+    try {
+      const queryDate = new Date(date);
+      queryDate.setHours(0, 0, 0, 0);
+      const nextDate = new Date(queryDate);
+      nextDate.setDate(nextDate.getDate() + 1);
 
-    const events = await EventTable.findAll({
-      where: {
-        startDate: { [Op.gte]: queryDate, [Op.lt]: nextDate }
-      },
-      order: [['startDate', 'ASC']]
-    });
+      const events = await EventTable.findAll({
+        where: {
+          startDate: { [Op.gte]: queryDate, [Op.lt]: nextDate }
+        },
+        order: [['startDate', 'ASC']]
+      });
 
-    res.status(200).json({ events });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: EVENT_GET_ERROR, error });
-  }
-};
+      res.status(200).json({ events });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: EVENT_GET_ERROR, error });
+    }
+  };
 
 // ✅ Get Upcoming Events
 export const getUpcomingEventsHandler: EndpointHandler<
@@ -364,19 +372,19 @@ export const getUpcomingEventsHandler: EndpointHandler<
   _req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const events = await EventTable.findAll({
-      where: { startDate: { [Op.gte]: today } },
-      order: [['startDate', 'ASC']]
-    });
-    res.status(200).json({ events });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: EVENT_GET_ERROR, error });
-  }
-};
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const events = await EventTable.findAll({
+        where: { startDate: { [Op.gte]: today } },
+        order: [['startDate', 'ASC']]
+      });
+      res.status(200).json({ events });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: EVENT_GET_ERROR, error });
+    }
+  };
 
 // ✅ Get Popular Events
 export const getPopularEventsHandler: EndpointHandler<
@@ -385,18 +393,18 @@ export const getPopularEventsHandler: EndpointHandler<
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  try {
-    const { limit = 10 } = req.query;
-    const events = await EventTable.findAll({
-      order: [['joinsCount', 'DESC']],
-      limit: parseInt(limit as string)
-    });
-    res.status(200).json({ events });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: EVENT_GET_ERROR, error });
-  }
-};
+    try {
+      const { limit = 10 } = req.query;
+      const events = await EventTable.findAll({
+        order: [['joinsCount', 'DESC']],
+        limit: parseInt(limit as string)
+      });
+      res.status(200).json({ events });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: EVENT_GET_ERROR, error });
+    }
+  };
 
 // ✅ Join Event
 export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
@@ -594,40 +602,40 @@ export const getEventParticipantsHandler: EndpointHandler<
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  const { eventId } = req.params;
+    const { eventId } = req.params;
 
-  try {
-    const event = await EventTable.findByPk(eventId);
-    if (!event) {
-      res.status(404).json({ message: EVENT_NOT_FOUND });
-      return;
+    try {
+      const event = await EventTable.findByPk(eventId);
+      if (!event) {
+        res.status(404).json({ message: EVENT_NOT_FOUND });
+        return;
+      }
+
+      let participantIds: string[] = event.participants || [];
+      if (typeof participantIds === 'string')
+        participantIds = JSON.parse(participantIds);
+
+      const participants = await User.findAll({
+        where: { id: participantIds },
+        attributes: ['id', 'name', 'email']
+      });
+
+      res.status(200).json({
+        eventId: event.eventId,
+        eventName: event.name,
+        joinsCount: event.joinsCount,
+        participantIds,
+        participants: participants.map((p) => ({
+          userId: p.id,
+          name: p.name,
+          email: p.email
+        }))
+      });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: EVENT_GET_ERROR, error });
     }
-
-    let participantIds: string[] = event.participants || [];
-    if (typeof participantIds === 'string')
-      participantIds = JSON.parse(participantIds);
-
-    const participants = await User.findAll({
-      where: { id: participantIds },
-      attributes: ['id', 'name', 'email']
-    });
-
-    res.status(200).json({
-      eventId: event.eventId,
-      eventName: event.name,
-      joinsCount: event.joinsCount,
-      participantIds,
-      participants: participants.map((p) => ({
-        userId: p.id,
-        name: p.name,
-        email: p.email
-      }))
-    });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: EVENT_GET_ERROR, error });
-  }
-};
+  };
 
 // ✅ Get User Joined Events
 export const getUserJoinedEventsHandler: EndpointHandler<
@@ -636,60 +644,60 @@ export const getUserJoinedEventsHandler: EndpointHandler<
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  const userId = getUserIdFromRequest(req);
-  if (!userId) {
-    res.status(401).json({ message: 'User ID not found in token' });
-    return;
-  }
-
-  try {
-    const user = await User.findByPk(userId, {
-      attributes: ['id', 'name', 'email', 'joinedEvents']
-    });
-    if (!user) {
-      res.status(404).json({ message: USER_NOT_FOUND_ERROR });
+    const userId = getUserIdFromRequest(req);
+    if (!userId) {
+      res.status(401).json({ message: 'User ID not found in token' });
       return;
     }
 
-    let eventIds: string[] = user.joinedEvents || [];
-    if (typeof eventIds === 'string') eventIds = JSON.parse(eventIds);
-
-    let joinedEventsWithDetails: any[] = [];
-    if (eventIds.length > 0) {
-      const events = await EventTable.findAll({
-        where: { eventId: eventIds },
-        attributes: [
-          'eventId',
-          'name',
-          'location',
-          'startDate',
-          'endDate',
-          'joinsCount'
-        ]
+    try {
+      const user = await User.findByPk(userId, {
+        attributes: ['id', 'name', 'email', 'joinedEvents']
       });
-      joinedEventsWithDetails = events.map((event) => ({
-        eventId: event.eventId,
-        eventName: event.name,
-        location: event.location,
-        startDate: event.startDate,
-        endDate: event.endDate,
-        participantsCount: event.joinsCount
-      }));
-    }
+      if (!user) {
+        res.status(404).json({ message: USER_NOT_FOUND_ERROR });
+        return;
+      }
 
-    res.status(200).json({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
-      totalEventsJoined: eventIds.length,
-      joinedEventIds: eventIds,
-      joinedEvents: joinedEventsWithDetails
-    });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: EVENT_GET_ERROR, error });
-  }
-};
+      let eventIds: string[] = user.joinedEvents || [];
+      if (typeof eventIds === 'string') eventIds = JSON.parse(eventIds);
+
+      let joinedEventsWithDetails: any[] = [];
+      if (eventIds.length > 0) {
+        const events = await EventTable.findAll({
+          where: { eventId: eventIds },
+          attributes: [
+            'eventId',
+            'name',
+            'location',
+            'startDate',
+            'endDate',
+            'joinsCount'
+          ]
+        });
+        joinedEventsWithDetails = events.map((event) => ({
+          eventId: event.eventId,
+          eventName: event.name,
+          location: event.location,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          participantsCount: event.joinsCount
+        }));
+      }
+
+      res.status(200).json({
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        totalEventsJoined: eventIds.length,
+        joinedEventIds: eventIds,
+        joinedEvents: joinedEventsWithDetails
+      });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: EVENT_GET_ERROR, error });
+    }
+  };
 
 // ✅ Get Event Profile (No Auth)
 export const getEventProfileHandler: EndpointHandler<
@@ -804,56 +812,56 @@ export const getLeaderboardHandler: EndpointHandler<
   _req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  try {
-    const eventLogs = await EventLogs.findAll({
-      include: [{ association: 'user', attributes: ['id', 'name', 'email'] }],
-      attributes: ['userId', 'totalHours', 'garbageWeight', 'eventId']
-    });
+    try {
+      const eventLogs = await EventLogs.findAll({
+        include: [{ association: 'user', attributes: ['id', 'name', 'email'] }],
+        attributes: ['userId', 'totalHours', 'garbageWeight', 'eventId']
+      });
 
-    const userStatsMap = new Map<string, any>();
+      const userStatsMap = new Map<string, any>();
 
-    eventLogs.forEach((log: any) => {
-      const userId = log.userId;
-      if (!userStatsMap.has(userId)) {
-        userStatsMap.set(userId, {
-          userId,
-          userName: log.user?.name || 'Unknown',
-          userEmail: log.user?.email || null,
-          totalHours: 0,
-          totalGarbageWeight: 0,
-          eventsParticipated: 0
-        });
-      }
-      const stats = userStatsMap.get(userId);
-      stats.totalHours += log.totalHours || 0;
-      stats.totalGarbageWeight += log.garbageWeight || 0;
-      stats.eventsParticipated += 1;
-    });
+      eventLogs.forEach((log: any) => {
+        const userId = log.userId;
+        if (!userStatsMap.has(userId)) {
+          userStatsMap.set(userId, {
+            userId,
+            userName: log.user?.name || 'Unknown',
+            userEmail: log.user?.email || null,
+            totalHours: 0,
+            totalGarbageWeight: 0,
+            eventsParticipated: 0
+          });
+        }
+        const stats = userStatsMap.get(userId);
+        stats.totalHours += log.totalHours || 0;
+        stats.totalGarbageWeight += log.garbageWeight || 0;
+        stats.eventsParticipated += 1;
+      });
 
-    const leaderboard = Array.from(userStatsMap.values())
-      .sort((a, b) => b.totalHours - a.totalHours)
-      .map((user, index) => ({
-        rank: index + 1,
-        userId: user.userId,
-        userName: user.userName,
-        userEmail: user.userEmail,
-        totalHours: user.totalHours,
-        totalGarbageWeight: parseFloat(user.totalGarbageWeight.toFixed(2)),
-        eventsParticipated: user.eventsParticipated,
-        co2Offset: parseFloat((user.totalGarbageWeight * 0.5).toFixed(2)),
-        points: Math.floor(((user.totalHours * 60) / 30) * 5)
-      }));
+      const leaderboard = Array.from(userStatsMap.values())
+        .sort((a, b) => b.totalHours - a.totalHours)
+        .map((user, index) => ({
+          rank: index + 1,
+          userId: user.userId,
+          userName: user.userName,
+          userEmail: user.userEmail,
+          totalHours: user.totalHours,
+          totalGarbageWeight: parseFloat(user.totalGarbageWeight.toFixed(2)),
+          eventsParticipated: user.eventsParticipated,
+          co2Offset: parseFloat((user.totalGarbageWeight * 0.5).toFixed(2)),
+          points: Math.floor(((user.totalHours * 60) / 30) * 5)
+        }));
 
-    res.status(200).json({
-      message: 'User leaderboard retrieved successfully',
-      totalUsers: leaderboard.length,
-      leaderboard
-    });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: 'Error fetching leaderboard', error });
-  }
-};
+      res.status(200).json({
+        message: 'User leaderboard retrieved successfully',
+        totalUsers: leaderboard.length,
+        leaderboard
+      });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: 'Error fetching leaderboard', error });
+    }
+  };
 
 // ✅ Get Dashboard (User Profile)
 export const getDashboardHandler: EndpointHandler<
@@ -862,88 +870,88 @@ export const getDashboardHandler: EndpointHandler<
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  const userId = getUserIdFromRequest(req);
-  if (!userId) {
-    res.status(401).json({ message: 'User ID not found in token' });
-    return;
-  }
-
-  try {
-    const user = await User.findByPk(userId, {
-      attributes: ['id', 'name', 'email', 'role', 'joinedEvents']
-    });
-    if (!user) {
-      res.status(404).json({ message: 'User not found' });
+    const userId = getUserIdFromRequest(req);
+    if (!userId) {
+      res.status(401).json({ message: 'User ID not found in token' });
       return;
     }
 
-    let eventIds: string[] = user.joinedEvents || [];
-    if (typeof eventIds === 'string') eventIds = JSON.parse(eventIds);
-
-    let eventsJoinedWithDetails: any[] = [];
-    if (eventIds.length > 0) {
-      const fullEvents = await EventTable.findAll({
-        where: { eventId: { [Op.in]: eventIds } },
-        attributes: [
-          'eventId',
-          'name',
-          'location',
-          'startDate',
-          'endDate',
-          'joinsCount',
-          'eventImage'
-        ]
+    try {
+      const user = await User.findByPk(userId, {
+        attributes: ['id', 'name', 'email', 'role', 'joinedEvents']
       });
-      eventsJoinedWithDetails = fullEvents.map((event) => ({
-        eventId: event.eventId,
-        eventName: event.name,
-        location: event.location,
-        startDate: event.startDate,
-        endDate: event.endDate,
-        joinedCount: event.joinsCount,
-        eventImage: event.eventImage || null
-      }));
+      if (!user) {
+        res.status(404).json({ message: 'User not found' });
+        return;
+      }
+
+      let eventIds: string[] = user.joinedEvents || [];
+      if (typeof eventIds === 'string') eventIds = JSON.parse(eventIds);
+
+      let eventsJoinedWithDetails: any[] = [];
+      if (eventIds.length > 0) {
+        const fullEvents = await EventTable.findAll({
+          where: { eventId: { [Op.in]: eventIds } },
+          attributes: [
+            'eventId',
+            'name',
+            'location',
+            'startDate',
+            'endDate',
+            'joinsCount',
+            'eventImage'
+          ]
+        });
+        eventsJoinedWithDetails = fullEvents.map((event) => ({
+          eventId: event.eventId,
+          eventName: event.name,
+          location: event.location,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          joinedCount: event.joinsCount,
+          eventImage: event.eventImage || null
+        }));
+      }
+
+      const eventLogs = await EventLogs.findAll({
+        where: { userId },
+        attributes: ['totalHours', 'garbageWeight']
+      });
+
+      const totalHours = eventLogs.reduce(
+        (sum, log) => sum + (log.totalHours || 0),
+        0
+      );
+      const totalMinutesLogged = Math.floor(totalHours * 60);
+      const totalGarbageCollected = eventLogs.reduce(
+        (sum, log) => sum + (log.garbageWeight || 0),
+        0
+      );
+      const co2Collected = (totalGarbageCollected * 0.5).toFixed(2);
+      const totalPoints = Math.floor((totalMinutesLogged / 30) * 5);
+
+      res.status(200).json({
+        message: 'Dashboard retrieved successfully',
+        profile: {
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role
+        },
+        stats: {
+          totalPoints,
+          co2Collected: parseFloat(co2Collected),
+          totalMinutesLogged,
+          totalWeight: parseFloat(totalGarbageCollected.toFixed(2)),
+          todayHours: await getUserTodayHours(userId)
+        },
+        eventsJoined: eventsJoinedWithDetails
+      });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: 'Error fetching dashboard', error });
     }
-
-    const eventLogs = await EventLogs.findAll({
-      where: { userId },
-      attributes: ['totalHours', 'garbageWeight']
-    });
-
-    const totalHours = eventLogs.reduce(
-      (sum, log) => sum + (log.totalHours || 0),
-      0
-    );
-    const totalMinutesLogged = Math.floor(totalHours * 60);
-    const totalGarbageCollected = eventLogs.reduce(
-      (sum, log) => sum + (log.garbageWeight || 0),
-      0
-    );
-    const co2Collected = (totalGarbageCollected * 0.5).toFixed(2);
-    const totalPoints = Math.floor((totalMinutesLogged / 30) * 5);
-
-    res.status(200).json({
-      message: 'Dashboard retrieved successfully',
-      profile: {
-        userId: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      },
-      stats: {
-        totalPoints,
-        co2Collected: parseFloat(co2Collected),
-        totalMinutesLogged,
-        totalWeight: parseFloat(totalGarbageCollected.toFixed(2)),
-        todayHours: await getUserTodayHours(userId)
-      },
-      eventsJoined: eventsJoinedWithDetails
-    });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: 'Error fetching dashboard', error });
-  }
-};
+  };
 
 // ✅ Get Event Leaderboard
 export const getEventLeaderboardHandler: EndpointHandler<
@@ -952,101 +960,101 @@ export const getEventLeaderboardHandler: EndpointHandler<
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  const { eventId } = req.params;
+    const { eventId } = req.params;
 
-  try {
-    const event = await EventTable.findByPk(eventId, {
-      attributes: ['eventId', 'name', 'startDate', 'endDate', 'location']
-    });
-    if (!event) {
-      res.status(404).json({ message: EVENT_NOT_FOUND });
-      return;
+    try {
+      const event = await EventTable.findByPk(eventId, {
+        attributes: ['eventId', 'name', 'startDate', 'endDate', 'location']
+      });
+      if (!event) {
+        res.status(404).json({ message: EVENT_NOT_FOUND });
+        return;
+      }
+
+      const eventLogs = await EventLogs.findAll({
+        where: { eventId: event.eventId },
+        include: [{ association: 'user', attributes: ['id', 'name', 'email'] }],
+        attributes: [
+          'userId',
+          'totalHours',
+          'garbageWeight',
+          'checkInTime',
+          'checkOutTime'
+        ]
+      });
+
+      const userStatsMap = new Map<string, any>();
+
+      eventLogs.forEach((log: any) => {
+        const userId = log.userId;
+        if (!userStatsMap.has(userId)) {
+          userStatsMap.set(userId, {
+            userId,
+            userName: log.user?.name || 'Unknown',
+            userEmail: log.user?.email || null,
+            totalHours: 0,
+            totalGarbageWeight: 0,
+            checkInTime: log.checkInTime,
+            checkOutTime: log.checkOutTime,
+            logsCount: 0
+          });
+        }
+        const stats = userStatsMap.get(userId);
+        stats.totalHours += log.totalHours || 0;
+        stats.totalGarbageWeight += log.garbageWeight || 0;
+        stats.logsCount += 1;
+        if (
+          log.checkInTime &&
+          (!stats.checkInTime ||
+            new Date(log.checkInTime) < new Date(stats.checkInTime))
+        ) {
+          stats.checkInTime = log.checkInTime;
+        }
+        if (
+          log.checkOutTime &&
+          (!stats.checkOutTime ||
+            new Date(log.checkOutTime) > new Date(stats.checkOutTime))
+        ) {
+          stats.checkOutTime = log.checkOutTime;
+        }
+      });
+
+      const leaderboard = Array.from(userStatsMap.values())
+        .sort((a, b) => b.totalHours - a.totalHours)
+        .map((user, index) => ({
+          rank: index + 1,
+          userId: user.userId,
+          userName: user.userName,
+          userEmail: user.userEmail,
+          totalHours: user.totalHours,
+          garbageWeightCollected: parseFloat(user.totalGarbageWeight.toFixed(2)),
+          checkInTime: user.checkInTime,
+          checkOutTime: user.checkOutTime,
+          eventName: event.name,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          logEntries: user.logsCount
+        }));
+
+      res.status(200).json({
+        message: 'Event leaderboard retrieved successfully',
+        eventDetails: {
+          eventId: event.eventId,
+          eventName: event.name,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          location: event.location,
+          totalParticipants: leaderboard.length
+        },
+        leaderboard
+      });
+    } catch (error) {
+      reportError(error);
+      res
+        .status(500)
+        .json({ message: 'Error fetching event leaderboard', error });
     }
-
-    const eventLogs = await EventLogs.findAll({
-      where: { eventId: event.eventId },
-      include: [{ association: 'user', attributes: ['id', 'name', 'email'] }],
-      attributes: [
-        'userId',
-        'totalHours',
-        'garbageWeight',
-        'checkInTime',
-        'checkOutTime'
-      ]
-    });
-
-    const userStatsMap = new Map<string, any>();
-
-    eventLogs.forEach((log: any) => {
-      const userId = log.userId;
-      if (!userStatsMap.has(userId)) {
-        userStatsMap.set(userId, {
-          userId,
-          userName: log.user?.name || 'Unknown',
-          userEmail: log.user?.email || null,
-          totalHours: 0,
-          totalGarbageWeight: 0,
-          checkInTime: log.checkInTime,
-          checkOutTime: log.checkOutTime,
-          logsCount: 0
-        });
-      }
-      const stats = userStatsMap.get(userId);
-      stats.totalHours += log.totalHours || 0;
-      stats.totalGarbageWeight += log.garbageWeight || 0;
-      stats.logsCount += 1;
-      if (
-        log.checkInTime &&
-        (!stats.checkInTime ||
-          new Date(log.checkInTime) < new Date(stats.checkInTime))
-      ) {
-        stats.checkInTime = log.checkInTime;
-      }
-      if (
-        log.checkOutTime &&
-        (!stats.checkOutTime ||
-          new Date(log.checkOutTime) > new Date(stats.checkOutTime))
-      ) {
-        stats.checkOutTime = log.checkOutTime;
-      }
-    });
-
-    const leaderboard = Array.from(userStatsMap.values())
-      .sort((a, b) => b.totalHours - a.totalHours)
-      .map((user, index) => ({
-        rank: index + 1,
-        userId: user.userId,
-        userName: user.userName,
-        userEmail: user.userEmail,
-        totalHours: user.totalHours,
-        garbageWeightCollected: parseFloat(user.totalGarbageWeight.toFixed(2)),
-        checkInTime: user.checkInTime,
-        checkOutTime: user.checkOutTime,
-        eventName: event.name,
-        startDate: event.startDate,
-        endDate: event.endDate,
-        logEntries: user.logsCount
-      }));
-
-    res.status(200).json({
-      message: 'Event leaderboard retrieved successfully',
-      eventDetails: {
-        eventId: event.eventId,
-        eventName: event.name,
-        startDate: event.startDate,
-        endDate: event.endDate,
-        location: event.location,
-        totalParticipants: leaderboard.length
-      },
-      leaderboard
-    });
-  } catch (error) {
-    reportError(error);
-    res
-      .status(500)
-      .json({ message: 'Error fetching event leaderboard', error });
-  }
-};
+  };
 
 // ✅ Update Event Status (Admin Only)
 export const updateEventStatusHandler: EndpointHandler<
@@ -1055,63 +1063,63 @@ export const updateEventStatusHandler: EndpointHandler<
   req: EndpointRequestType[EndpointAuthType.JWT],
   res: Response
 ): Promise<void> => {
-  const { id } = req.params;
-  const { status } = req.body;
-  if (!['pending', 'approved', 'rejected'].includes(status)) {
-    res.status(400).json({ message: 'Invalid status' });
-    return;
-  }
-
-  try {
-    const event = await EventTable.findByPk(id);
-    if (!event) {
-      res.status(404).json({ message: EVENT_NOT_FOUND });
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!['pending', 'approved', 'rejected'].includes(status)) {
+      res.status(400).json({ message: 'Invalid status' });
       return;
     }
 
-    let attendentParticipant: string[] = event.attendentParticipant || [];
-    if (typeof attendentParticipant === 'string') {
-      try {
-        attendentParticipant = JSON.parse(attendentParticipant);
-      } catch {
-        attendentParticipant = [];
-      }
-    }
-
-    if (status === 'approved') {
-      if (event.createdBy && !attendentParticipant.includes(event.createdBy)) {
-        attendentParticipant = [...attendentParticipant, event.createdBy];
+    try {
+      const event = await EventTable.findByPk(id);
+      if (!event) {
+        res.status(404).json({ message: EVENT_NOT_FOUND });
+        return;
       }
 
-      const org = await Organization.findByPk(event.createdBy);
-      if (org) {
-        let orgEventIds: string[] = org.eventIds || [];
-        if (typeof orgEventIds === 'string') {
-          try { orgEventIds = JSON.parse(orgEventIds); } catch { orgEventIds = []; }
-        }
-        if (!orgEventIds.includes(event.eventId)) {
-          await org.update({ eventIds: [...orgEventIds, event.eventId] });
+      let attendentParticipant: string[] = event.attendentParticipant || [];
+      if (typeof attendentParticipant === 'string') {
+        try {
+          attendentParticipant = JSON.parse(attendentParticipant);
+        } catch {
+          attendentParticipant = [];
         }
       }
-    }
 
-    await EventTable.update(
-      {
-        status,
-        attendentParticipant
-      },
-      {
-        where: { eventId: id }
+      if (status === 'approved') {
+        if (event.createdBy && !attendentParticipant.includes(event.createdBy)) {
+          attendentParticipant = [...attendentParticipant, event.createdBy];
+        }
+
+        const org = await Organization.findByPk(event.createdBy);
+        if (org) {
+          let orgEventIds: string[] = org.eventIds || [];
+          if (typeof orgEventIds === 'string') {
+            try { orgEventIds = JSON.parse(orgEventIds); } catch { orgEventIds = []; }
+          }
+          if (!orgEventIds.includes(event.eventId)) {
+            await org.update({ eventIds: [...orgEventIds, event.eventId] });
+          }
+        }
       }
-    );
 
-    const updatedEvent = await EventTable.findByPk(id);
-    res.status(200).json({ message: 'Event status updated successfully', event: updatedEvent });
-  } catch (error) {
-    reportError(error);
-    res.status(500).json({ message: 'Failed to update event status', error });
-  }
-};
+      await EventTable.update(
+        {
+          status,
+          attendentParticipant
+        },
+        {
+          where: { eventId: id }
+        }
+      );
+
+      const updatedEvent = await EventTable.findByPk(id);
+      res.status(200).json({ message: 'Event status updated successfully', event: updatedEvent });
+    } catch (error) {
+      reportError(error);
+      res.status(500).json({ message: 'Failed to update event status', error });
+    }
+  };
 
 // ✅ Register for Event (Increment registeredParticipant)
 export const registerEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
@@ -1252,7 +1260,7 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
     if (typeof registered === 'string') {
       try { registered = JSON.parse(registered); } catch { registered = []; }
     }
-    
+
     let attendent: string[] = event.attendentParticipant || [];
     if (typeof attendent === 'string') {
       try { attendent = JSON.parse(attendent); } catch { attendent = []; }
@@ -1260,7 +1268,7 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
 
     // Remove from registered if present
     const updatedRegistered = registered.filter(rid => rid !== user.id);
-    
+
     // Add to attendent if not present
     if (!attendent.includes(user.id)) {
       attendent = [...attendent, user.id];
@@ -1366,7 +1374,8 @@ export const stopEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 ): Promise<void> => {
   const { eventId } = req.params;
   const orgId = getUserIdFromRequest(req);
-  const { totalWeight = 0, location, garbageType } = req.body;
+  // Accept checkOutTime in payload from frontend (Individual User Flow)
+  const { totalWeight = 0, location, garbageType, checkOutTime } = req.body;
 
   try {
     if (!orgId) {
@@ -1396,22 +1405,36 @@ export const stopEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
-    const checkOutTime = new Date();
+    // Parse the checkOutTime passed from the frontend, falling back to current server date/time if not provided
+    const finalCheckOutTime = checkOutTime ? new Date(checkOutTime) : new Date();
     const count = activeLogs.length;
     const splitWeight = count > 0 ? Number(totalWeight) / count : 0;
+
+    // RULE: For the first 30 minutes, organization should not be able to stop the event.
+    const firstCheckInTime = new Date(activeLogs[0].checkInTime).getTime();
+    const elapsedMinutes = (finalCheckOutTime.getTime() - firstCheckInTime) / (1000 * 60);
+    if (elapsedMinutes < 30) {
+      const remainingMin = Math.ceil(30 - elapsedMinutes);
+      res.status(400).json({
+        message: `You cannot stop the event within the first 30 minutes. Please wait ${remainingMin} more minute(s).`,
+        success: false
+      });
+      return;
+    }
 
     let eventElapsedHours = 0;
 
     for (const log of activeLogs) {
-      const elapsedMs = checkOutTime.getTime() - new Date(log.checkInTime).getTime();
-      const elapsedHours = Math.max(0.1, parseFloat((elapsedMs / (1000 * 3600)).toFixed(2)));
+      const elapsedMs = finalCheckOutTime.getTime() - new Date(log.checkInTime).getTime();
+      // Calculate elapsed hours based on finalCheckOutTime (duration limit is capped on frontend)
+      let elapsedHours = Math.max(0.1, parseFloat((elapsedMs / (1000 * 3600)).toFixed(2)));
 
       if (eventElapsedHours === 0) {
         eventElapsedHours = elapsedHours;
       }
 
       await log.update({
-        checkOutTime,
+        checkOutTime: finalCheckOutTime,
         totalHours: elapsedHours,
         garbageWeight: splitWeight,
         garbageType: garbageType || log.garbageType,
