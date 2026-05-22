@@ -202,6 +202,14 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
       return;
     }
 
+    // Restrict checking in/starting clean-up if the event has already ended/completed
+    if (event.endDate && new Date(event.endDate) < new Date()) {
+      res.status(400).json({
+        message: 'This event has already completed/ended.'
+      });
+      return;
+    }
+
     const totalHours = 0;
     // if (hoursEnrolled) {
     //   totalHours = parseHoursEnrolled(hoursEnrolled);
