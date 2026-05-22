@@ -432,6 +432,15 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       return;
     }
 
+    // Restrict individual users from joining an event if it has already ended/completed
+    if (event.endDate && new Date(event.endDate) < new Date()) {
+      res.status(400).json({
+        message: 'This event has already completed/ended.',
+        success: false
+      });
+      return;
+    }
+
     let eventImagePath = null;
     if ((req as any).file) {
       eventImagePath = getRelativeImagePath((req as any).file.path);
