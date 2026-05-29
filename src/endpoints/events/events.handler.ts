@@ -28,6 +28,19 @@ const getUserIdFromRequest = (req: any): string | undefined => {
   );
 };
 
+// Helper to count only individual (non-organization) users from a participant ID list.
+// Queries the Organization table to identify org IDs and excludes them from the count.
+const countIndividualUsers = async (participantIds: string[]): Promise<number> => {
+  if (participantIds.length === 0) return 0;
+  const orgRecords = await Organization.findAll({
+    where: { orgId: { [Op.in]: participantIds } },
+    attributes: ['orgId']
+  });
+  const orgIdSet = new Set(orgRecords.map(o => o.orgId));
+  // Return count of IDs that are NOT organization IDs
+  return participantIds.filter(id => !orgIdSet.has(id)).length;
+};
+
 // ✅ Create Event
 export const createEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
   req: EndpointRequestType[EndpointAuthType.JWT],
@@ -225,12 +238,65 @@ export const getEventByIdHandler: EndpointHandler<
         }
       }
 
+      // Check if the event's creator is an organization to determine organization flow rules (looks up orgId matching event's creator ID)
+      const isOrgCreated = await Organization.findOne({
+        where: { orgId: event.createdBy }
+      });
+
+      // Parse the attendee IDs list
+      let attendentIds = event.attendentParticipant || [];
+      if (typeof attendentIds === 'string') {
+        try { attendentIds = JSON.parse(attendentIds); } catch { attendentIds = []; }
+      }
+
+      let attendentUsers: any[] = [];
+      if (attendentIds.length > 0) {
+        // Fetch user profiles for the attendee IDs
+        const users = await User.findAll({
+          where: { id: { [Op.in]: attendentIds } },
+          attributes: ['id', 'name', 'role', 'updatedAt']
+        });
+
+        // If the event was created by an organization, skip/filter out other organization accounts to only count individual users
+        const filteredUsers = isOrgCreated
+          ? users.filter(u => u.role !== 'organization')
+          : users;
+
+        const filteredUserIds = filteredUsers.map(u => u.id);
+
+        // Keep only filtered user IDs in the list returned to the client
+        attendentIds = attendentIds.filter(id => filteredUserIds.includes(id));
+
+        // Fetch all EventLogs for the filtered users in this event to display multiple check-in/checkout records
+        const logs = await EventLogs.findAll({
+          where: { eventId: id, userId: { [Op.in]: filteredUserIds } },
+          attributes: ['id', 'userId', 'checkInTime', 'checkOutTime', 'totalHours', 'garbageWeight', 'garbageType', 'updatedAt']
+        });
+
+        // Map filtered user details to a map for fast lookup of names by user ID
+        const userMap = new Map(filteredUsers.map(u => [u.id, u.name]));
+
+        // Construct the full attendance logs list, where each entry represents a distinct EventLogs record with all details
+        attendentUsers = logs.map(log => ({
+          id: log.userId,
+          logId: log.id,
+          name: userMap.get(log.userId) || 'Unknown',
+          checkInTime: log.checkInTime,
+          checkOutTime: log.checkOutTime,
+          totalHours: log.totalHours,
+          garbageWeight: log.garbageWeight,
+          garbageType: log.garbageType,
+          updatedAt: log.updatedAt
+        }));
+      }
+
       res.status(200).json({
         event,
         eventId: event.eventId,
         registeredParticipant: event.registeredParticipant,
         displayRegisteredParticipant,
-        attendentParticipant: event.attendentParticipant,
+        attendentParticipant: attendentIds,
+        attendentUsers,
         participantsCount: event.joinsCount,
         participantIds: participants,
         userPoints,
@@ -484,11 +550,13 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       attendentParticipant = [...attendentParticipant, user.id];
     }
 
-    const activeParticipantsCount = event.eventType === 'private' ? registeredParticipant.length : attendentParticipant.length;
     const participantIds = event.eventType === 'private' ? registeredParticipant : attendentParticipant;
 
+    // Count only individual (non-organization) users for the displayed joinsCount
+    const individualCount = await countIndividualUsers(attendentParticipant);
+
     const updateData: any = {
-      joinsCount: activeParticipantsCount,
+      joinsCount: individualCount,
       registeredParticipant,
       attendentParticipant
     };
@@ -508,7 +576,7 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       data: {
         eventId: event.eventId,
         eventName: event.name,
-        totalParticipants: activeParticipantsCount,
+        totalParticipants: individualCount,
         participantIds: participantIds
       }
     });
@@ -574,9 +642,13 @@ export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     const updatedAttendent = attendentParticipant.filter((id) => id !== user.id);
 
     const updatedParticipants = participants.filter((id) => id !== user.id);
+
+    // Count only individual (non-organization) users after removing the leaving user
+    const individualCount = await countIndividualUsers(updatedAttendent);
+
     await event.update({
       participants: updatedParticipants,
-      joinsCount: updatedParticipants.length,
+      joinsCount: individualCount,
       registeredParticipant: updatedRegistered,
       attendentParticipant: updatedAttendent
     });
@@ -594,7 +666,7 @@ export const leaveEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       event: {
         eventId: event.eventId,
         name: event.name,
-        joinsCount: updatedParticipants.length,
+        joinsCount: individualCount,
         participantIds: updatedParticipants
       }
     });
@@ -1178,10 +1250,19 @@ export const registerEventHandler: EndpointHandler<EndpointAuthType.JWT> = async
     }
 
     const updatedParticipants = [...participants, user.id];
+
+    // Parse attendentParticipant to calculate the count of individual (non-organization) users who have checked in/attended.
+    // Since registration does not mark the user as attended, joinsCount remains unchanged (based only on scanned attendees).
+    let attendentIds = event.attendentParticipant || [];
+    if (typeof attendentIds === 'string') {
+      try { attendentIds = JSON.parse(attendentIds); } catch { attendentIds = []; }
+    }
+    const individualCount = await countIndividualUsers(attendentIds);
+
     await event.update({
       registeredParticipant: registered,
       participants: updatedParticipants,
-      joinsCount: updatedParticipants.length
+      joinsCount: individualCount
     });
 
     // Update user's joinedEvents
@@ -1283,9 +1364,15 @@ export const attendanceEventHandler: EndpointHandler<EndpointAuthType.JWT> = asy
       attendent = [...attendent, user.id];
     }
 
+    // Count only individual (non-organization) users who have successfully scanned their QR and checked in.
+    // This updates the joinsCount when moving a user from registeredParticipant to attendentParticipant.
+    const individualCount = await countIndividualUsers(attendent);
+
+    // Only update the participants list when scanning QR code, and do not write to the EventLogs table (logs will be added during manual Log Clean-up submit)
     await event.update({
       registeredParticipant: updatedRegistered,
-      attendentParticipant: attendent
+      attendentParticipant: attendent,
+      joinsCount: individualCount
     });
 
     res.status(200).json({
