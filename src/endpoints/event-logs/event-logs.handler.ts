@@ -92,6 +92,47 @@ export async function getUserTodayHours(userId: string): Promise<number> {
   return logs.reduce((sum, log) => sum + (log.totalHours || 0), 0);
 }
 
+/**
+ * Helper: get the YYYY-MM-DD formatted date string for a given date in Singapore timezone
+ */
+export function getSingaporeDateString(dateInput: Date | string): string {
+  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  return formatter.format(date);
+}
+
+/**
+ * Helper: calculate total hours already logged by a user for a specific event on a specific date (Singapore timezone)
+ */
+export async function getUserEventTodayHours(
+  userId: string,
+  eventId: string,
+  dateStr: string,
+  excludeLogId?: string | number
+): Promise<number> {
+  const whereClause: any = { userId, eventId };
+  if (excludeLogId) {
+    whereClause.id = { [Op.ne]: excludeLogId };
+  }
+  
+  const logs = await EventLogs.findAll({ where: whereClause });
+  
+  return logs.reduce((sum, log) => {
+    if (log.checkOutTime && log.totalHours) {
+      const logSGDate = getSingaporeDateString(log.checkInTime);
+      if (logSGDate === dateStr) {
+        return sum + log.totalHours;
+      }
+    }
+    return sum;
+  }, 0);
+}
+
 // ✅ Create Event Log (Check In) with hoursEnrolled
 // export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = async (
 //   req: any,
@@ -215,11 +256,20 @@ export const createEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
     //   totalHours = parseHoursEnrolled(hoursEnrolled);
     // }
 
-    // Enforce 2-hour daily limit
-    const todayHours = await getUserTodayHours(userId);
-    if (todayHours + totalHours > 2) {
+    // Enforce 2-hour daily limit per event (Singapore timezone)
+    const referenceDate = checkInTime ? new Date(checkInTime) : new Date();
+    const dateStr = getSingaporeDateString(referenceDate);
+    const alreadyLoggedHours = await getUserEventTodayHours(userId, eventId, dateStr);
+    
+    let incomingHours = 0;
+    if (hoursEnrolled) {
+      incomingHours = parseFloat(hoursEnrolled);
+      if (isNaN(incomingHours)) incomingHours = 0;
+    }
+
+    if (alreadyLoggedHours + incomingHours > 2.01) {
       res.status(400).json({ 
-        message: `You have already logged ${todayHours.toFixed(1)} hours today. Daily limit is 2 hours. You can only log ${ (2 - todayHours).toFixed(1) } more hours.` 
+        message: `You have reached the daily hours limit for this event.` 
       });
       return;
     }
@@ -508,6 +558,17 @@ export const updateEventLogHandler: EndpointHandler<EndpointAuthType.JWT> = asyn
 
       const diffMs = checkOutDate.getTime() - checkInDate.getTime();
       const sessionHours = diffMs / (1000 * 60 * 60);
+      
+      // Enforce the 2-hour daily limit per event for check-out (Singapore timezone)
+      const dateStr = getSingaporeDateString(eventLog.checkInTime);
+      const alreadyLoggedHours = await getUserEventTodayHours(eventLog.userId, eventLog.eventId, dateStr, eventLog.id);
+
+      if (alreadyLoggedHours + sessionHours > 2.01) {
+        res.status(400).json({
+          message: `Logging this session would exceed the 2-hour daily limit for this event today. You have already logged ${alreadyLoggedHours.toFixed(1)} hours for this event, and this session is ${sessionHours.toFixed(1)} hours.`
+        });
+        return;
+      }
       
       const previousTotalHours = await getUserTotalHours(eventLog.userId);
       const newTotalHours = previousTotalHours + sessionHours;
@@ -925,6 +986,22 @@ export const bulkCheckInHandler: EndpointHandler<EndpointAuthType.JWT> = async (
     }
 
     const checkInDate = new Date(checkInTime);
+    const dateStr = getSingaporeDateString(checkInDate);
+    const incomingHours = parseFloat(hoursEnrolled) || 0;
+
+    // Enforce 2-hour daily limit per event for all bulk checked-in volunteers
+    for (const userId of users) {
+      const alreadyLoggedHours = await getUserEventTodayHours(userId, eventId, dateStr);
+      if (alreadyLoggedHours + incomingHours > 2.01) {
+        const user = await User.findByPk(userId);
+        const userName = user ? user.name : userId;
+        res.status(400).json({
+          message: `User "${userName}" has already logged ${alreadyLoggedHours.toFixed(1)} hours for this event today. Enrolling them for ${incomingHours.toFixed(1)} hours would exceed the 2-hour daily limit.`
+        });
+        return;
+      }
+    }
+
     const createdLogs = [];
 
     for (const userId of users) {
@@ -983,6 +1060,36 @@ export const bulkCheckOutHandler: EndpointHandler<EndpointAuthType.JWT> = async 
     let totalWeightSum = 0;
     let updatedCount = 0;
     const weight = parseFloat(garbageWeight);
+
+    // Validate that none of the check-outs would exceed the 2-hour daily limit per event today
+    for (const userId of users) {
+      const whereClause: any = { userId, checkOutTime: null };
+      if (eventId) whereClause.eventId = eventId;
+
+      const log = await EventLogs.findOne({
+        where: whereClause,
+        order: [['checkInTime', 'DESC']]
+      });
+
+      if (!log) continue;
+
+      const checkIn = new Date(log.checkInTime);
+      const checkOut = new Date(checkOutTime);
+      if (checkOut < checkIn) continue;
+
+      const sessionHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+      const dateStr = getSingaporeDateString(checkIn);
+      const alreadyLoggedHours = await getUserEventTodayHours(userId, log.eventId, dateStr, log.id);
+
+      if (alreadyLoggedHours + sessionHours > 2.01) {
+        const user = await User.findByPk(userId);
+        const userName = user ? user.name : userId;
+        res.status(400).json({
+          message: `Checking out user "${userName}" would exceed the 2-hour daily limit for this event today. They have already logged ${alreadyLoggedHours.toFixed(1)} hours, and this session is ${sessionHours.toFixed(1)} hours.`
+        });
+        return;
+      }
+    }
 
     for (const userId of users) {
       // Build where clause: open check‑in, optionally filter by eventId
@@ -1044,5 +1151,65 @@ export const bulkCheckOutHandler: EndpointHandler<EndpointAuthType.JWT> = async 
     }
     reportError(error);
     res.status(500).json({ message: 'Error during bulk check‑out', error });
+  }
+};
+
+// ✅ Check Event Logs Daily limit for multiple users/scanned volunteers (Lightweight API)
+export const checkEventLogsLimitHandler: EndpointHandler<EndpointAuthType.JWT> = async (
+  req: any,
+  res: Response
+): Promise<void> => {
+  const { eventId, date, userIds } = req.body;
+
+  try {
+    if (!eventId || !date || !userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      res.status(200).json({ maxHours: 0, userName: '' });
+      return;
+    }
+
+    // Fetch completed logs for the target event and users
+    const logs = await EventLogs.findAll({
+      where: {
+        eventId,
+        userId: { [Op.in]: userIds },
+        checkOutTime: { [Op.ne]: null }
+      },
+      include: [
+        { association: 'user', attributes: ['name'] }
+      ]
+    });
+
+    // Group logs by userId and calculate the total sum for the target date (Singapore timezone)
+    const userHoursMap: Record<string, { name: string; hours: number }> = {};
+    logs.forEach((log) => {
+      if (!log.checkInTime || !log.totalHours) return;
+      const logSGDate = getSingaporeDateString(log.checkInTime);
+      if (logSGDate === date) {
+        const uId = log.userId;
+        const uName = log.user?.name || 'Volunteer';
+        if (!userHoursMap[uId]) {
+          userHoursMap[uId] = { name: uName, hours: 0 };
+        }
+        userHoursMap[uId].hours += log.totalHours;
+      }
+    });
+
+    let maxHours = 0;
+    let maxHoursUserName = '';
+
+    Object.values(userHoursMap).forEach((entry) => {
+      if (entry.hours > maxHours) {
+        maxHours = entry.hours;
+        maxHoursUserName = entry.name;
+      }
+    });
+
+    res.status(200).json({
+      maxHours,
+      userName: maxHoursUserName || 'Volunteer'
+    });
+  } catch (error) {
+    reportError(error);
+    res.status(500).json({ message: 'Error checking limits', error });
   }
 };

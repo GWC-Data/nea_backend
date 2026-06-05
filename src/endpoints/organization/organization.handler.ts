@@ -299,7 +299,8 @@ export const getOrganizationDashboardHandler: EndpointHandler<
         'startDate',
         'endDate',
         'joinsCount',
-        'eventImage'
+        'eventImage',
+        'eventType'
       ]
     });
 
@@ -314,7 +315,8 @@ export const getOrganizationDashboardHandler: EndpointHandler<
         'endDate',
         'joinsCount',
         'eventImage',
-        'status'
+        'status',
+        'eventType'
       ]
     });
     const privateEvents = await EventTable.findAll({
@@ -327,7 +329,8 @@ export const getOrganizationDashboardHandler: EndpointHandler<
         'endDate',
         'joinsCount',
         'eventImage',
-        'status'
+        'status',
+        'eventType'
       ]
     });
 
@@ -375,7 +378,8 @@ export const getOrganizationDashboardHandler: EndpointHandler<
         eventStartDate: e.startDate,
         eventEndDate: e.endDate,
         joinedCount: e.joinsCount,
-        eventImage: e.eventImage
+        eventImage: e.eventImage,
+        eventType: e.eventType
       })),
       events: {
         public: publicEvents.map((e) => ({
@@ -387,7 +391,8 @@ export const getOrganizationDashboardHandler: EndpointHandler<
           joinedCount: e.joinsCount,
           eventImage: e.eventImage,
           status: e.status,
-          isStarted: activeEventIds.has(e.eventId)
+          isStarted: activeEventIds.has(e.eventId),
+          eventType: e.eventType
         })),
         private: privateEvents.map((e) => ({
           eventId: e.eventId,
@@ -398,7 +403,8 @@ export const getOrganizationDashboardHandler: EndpointHandler<
           joinedCount: e.joinsCount,
           eventImage: e.eventImage,
           status: e.status,
-          isStarted: activeEventIds.has(e.eventId)
+          isStarted: activeEventIds.has(e.eventId),
+          eventType: e.eventType
         }))
       },
       usersJoined: usersJoined.map((u) => ({

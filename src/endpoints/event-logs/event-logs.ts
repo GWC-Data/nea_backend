@@ -15,7 +15,8 @@ import {
   getUserRewardsSummaryHandler,
   getTimerHandler,
   bulkCheckInHandler,
-  bulkCheckOutHandler
+  bulkCheckOutHandler,
+  checkEventLogsLimitHandler
 } from './event-logs.handler';
 import { bulkCheckInValidator } from './event-logs.validator';
 
@@ -148,6 +149,15 @@ export const bulkCheckOutEventEndpoint = new Endpoint({
   validator: {},
 });
 
+// Specific path: /event-logs/check-limit
+export const checkEventLogsLimitEndpoint = new Endpoint({
+  path: '/event-logs/check-limit',
+  method: EndpointMethod.POST,
+  handler: checkEventLogsLimitHandler,
+  authType: EndpointAuthType.JWT,
+  validator: {},
+});
+
 // ✅ EXPORT IN PRIORITY ORDER - This ensures routes are matched correctly
 // Specific paths MUST come before generic paths with parameters
 export const orderedEventLogsEndpoints = [
@@ -157,6 +167,7 @@ export const orderedEventLogsEndpoints = [
   getUserEventLogsByDateEndpoint, // GET /event-logs/user/date/:date
   getEventLogsByUserEndpoint, // GET /event-logs/user ✅ CRITICAL - before /:id
   getEventLogsByEventEndpoint, // GET /event-logs/event/:eventId
+  checkEventLogsLimitEndpoint, // POST /event-logs/check-limit
   getEventLogsByDateRangeEndpoint, // POST /event-logs/date-range
   getEventLogByIdEndpoint, // GET /event-logs/:id (generic - MUST be last)
   updateEventLogEndpoint, // PUT /event-logs/:id

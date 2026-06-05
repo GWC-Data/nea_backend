@@ -530,7 +530,14 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       }
     }
 
-    if (event.eventType === 'private') {
+    // Check if the event is created by an organization
+    const isCreatedByOrg = event.createdBy ? await Organization.findByPk(event.createdBy) : null;
+    
+    // If the event is private or is created by an organization, we add joining users to the registeredParticipant column
+    // so they can be scanned/checked in later by the organization
+    const shouldRegister = event.eventType === 'private' || !!isCreatedByOrg;
+
+    if (shouldRegister) {
       if (registeredParticipant.includes(user.id)) {
         res.status(400).json({
           message: 'You have already joined this event.',
@@ -550,7 +557,7 @@ export const joinEventHandler: EndpointHandler<EndpointAuthType.JWT> = async (
       attendentParticipant = [...attendentParticipant, user.id];
     }
 
-    const participantIds = event.eventType === 'private' ? registeredParticipant : attendentParticipant;
+    const participantIds = shouldRegister ? registeredParticipant : attendentParticipant;
 
     // Count only individual (non-organization) users for the displayed joinsCount
     const individualCount = await countIndividualUsers(attendentParticipant);
@@ -971,6 +978,7 @@ export const getDashboardHandler: EndpointHandler<
 
       let eventsJoinedWithDetails: any[] = [];
       if (eventIds.length > 0) {
+        // Retrieve full event details including eventType to display public/private badges correctly on frontend
         const fullEvents = await EventTable.findAll({
           where: { eventId: { [Op.in]: eventIds } },
           attributes: [
@@ -980,7 +988,8 @@ export const getDashboardHandler: EndpointHandler<
             'startDate',
             'endDate',
             'joinsCount',
-            'eventImage'
+            'eventImage',
+            'eventType'
           ]
         });
         eventsJoinedWithDetails = fullEvents.map((event) => ({
@@ -990,7 +999,8 @@ export const getDashboardHandler: EndpointHandler<
           startDate: event.startDate,
           endDate: event.endDate,
           joinedCount: event.joinsCount,
-          eventImage: event.eventImage || null
+          eventImage: event.eventImage || null,
+          eventType: event.eventType
         }));
       }
 
