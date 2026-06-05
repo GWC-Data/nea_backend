@@ -978,6 +978,7 @@ export const getDashboardHandler: EndpointHandler<
 
       let eventsJoinedWithDetails: any[] = [];
       if (eventIds.length > 0) {
+        // Retrieve full event details including eventType to display public/private badges correctly on frontend
         const fullEvents = await EventTable.findAll({
           where: { eventId: { [Op.in]: eventIds } },
           attributes: [
@@ -987,7 +988,8 @@ export const getDashboardHandler: EndpointHandler<
             'startDate',
             'endDate',
             'joinsCount',
-            'eventImage'
+            'eventImage',
+            'eventType'
           ]
         });
         eventsJoinedWithDetails = fullEvents.map((event) => ({
@@ -997,7 +999,8 @@ export const getDashboardHandler: EndpointHandler<
           startDate: event.startDate,
           endDate: event.endDate,
           joinedCount: event.joinsCount,
-          eventImage: event.eventImage || null
+          eventImage: event.eventImage || null,
+          eventType: event.eventType
         }));
       }
 
